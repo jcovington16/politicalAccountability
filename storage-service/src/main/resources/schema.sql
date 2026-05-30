@@ -1,14 +1,15 @@
+-- Create Politicians Table
 CREATE TABLE politicians (
-                             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                             full_name VARCHAR(255) NOT NULL,
-                             party VARCHAR(50),
-                             state VARCHAR(50),
-                             office VARCHAR(100),
-                             biography TEXT,
-                             profile_image_url TEXT,
-                             start_date DATE,
-                             end_date DATE NULL,
-                             created_at TIMESTAMP DEFAULT NOW()
+    id UUID PRIMARY KEY,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    party VARCHAR(100),
+    state VARCHAR(50),
+    office VARCHAR(100),
+    biography TEXT,
+    profile_image_url TEXT,
+    start_date DATE,
+    end_date DATE
 );
 
 CREATE TABLE bills (
@@ -41,4 +42,27 @@ CREATE TABLE media_files (
                              transcript TEXT,
                              tags TEXT[],
                              uploaded_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Create Content Items Table
+CREATE TABLE content_items (
+    id UUID PRIMARY KEY,
+    title TEXT NOT NULL,
+    content_type VARCHAR(50) NOT NULL, -- "tweet", "article", "speech", "video"
+    text_body TEXT,
+    media_url TEXT,
+    published_at TIMESTAMP NOT NULL,
+    content_hash VARCHAR(256) UNIQUE,
+    source_url TEXT NOT NULL,
+    politician_id UUID NOT NULL,
+    FOREIGN KEY (politician_id) REFERENCES politicians (id) ON DELETE CASCADE
+);
+
+-- Add Provenance Metadata
+CREATE TABLE provenance (
+    id UUID PRIMARY KEY,
+    content_item_id UUID NOT NULL,
+    source_type VARCHAR(100), -- e.g., Twitter API, Scraper
+    timestamp TIMESTAMP,
+    FOREIGN KEY (content_item_id) REFERENCES content_items (id) ON DELETE CASCADE
 );

@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Public Record",
+    "slug": "public-record-voter",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "publicrecord",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.publicrecord.voter",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Public Record does not require camera access for the MVP.",
+        "NSPhotoLibraryUsageDescription": "Public Record does not require photo library access for the MVP."
+      }
+    },
+    "android": {
+      "package": "com.publicrecord.voter",
+      "permissions": [],
+      "adaptiveIcon": {
+        "backgroundColor": "#13201b"
+      }
+    },
+    "extra": {
+      "apiBaseUrl": "http://localhost:8080"
+    }
+  }
+}

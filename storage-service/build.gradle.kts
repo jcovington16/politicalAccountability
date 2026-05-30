@@ -33,4 +33,5 @@ dependencies {
 
     // Testing
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.1")
+    testImplementation("org.liquibase:liquibase-core:4.33.0")
 }

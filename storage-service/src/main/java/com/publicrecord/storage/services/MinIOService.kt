@@ -8,24 +8,32 @@ import io.minio.GetObjectArgs
 import java.io.InputStream
 
 class MinIOService {
-    private val client = MinioClient.builder()
-        .endpoint("http://localhost:9000")
-        .credentials("admin", "secretpass")
-        .build()
+    // Read configuration from environment variables
+    private val endpoint: String = System.getenv("MINIO_ENDPOINT") ?: "http://minio:9000"
+    private val accessKey: String = System.getenv("MINIO_ACCESS_KEY") ?: "minioadmin"
+    private val secretKey: String = System.getenv("MINIO_SECRET_KEY") ?: "minioadmin"
+    private val bucketName: String = System.getenv("MINIO_BUCKET") ?: "political-media"
 
-    private val bucketName = "political-media"
+    private val client = MinioClient.builder()
+        .endpoint(endpoint)
+        .credentials(accessKey, secretKey)
+        .build()
 
     init {
         ensureBucketExists()
     }
 
     fun startService() {
-        println("✅ MinIO Service Started.")
+        println("✅ MinIO Service Started. endpoint=$endpoint, bucket=$bucketName")
     }
 
     private fun ensureBucketExists() {
-        if (!client.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build())) {
-            client.makeBucket(MakeBucketArgs.builder().bucket(bucketName).build())
+        try {
+            if (!client.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build())) {
+                client.makeBucket(MakeBucketArgs.builder().bucket(bucketName).build())
+            }
+        } catch (e: Exception) {
+            println("⚠️ Could not ensure MinIO bucket exists: ${e.message}")
         }
     }
 

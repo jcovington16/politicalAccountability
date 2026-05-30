@@ -15,24 +15,34 @@ services:
       - "5432:5432"
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
   zookeeper:
-    image: bitnami/zookeeper:latest
+    image: confluentinc/cp-zookeeper:7.4.0
     environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes # This allows kafka to connect and login with zookeeper
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
     networks:
       - app-network
 
   kafka:
-    image: bitnami/kafka:latest
+    image: confluentinc/cp-kafka:7.4.0
     environment:
-      - KAFKA_BROKER_ID=1
-      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
-      - ALLOW_PLAINTEXT_LISTENER=yes
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
     ports:
       - "9092:9092"
     depends_on:
@@ -45,11 +55,19 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
       - "9200:9200"
       - "9300:9300"
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
 
   minio:
     image: minio/minio
@@ -58,9 +76,17 @@ services:
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
       - "9000:9000"
-    command: server /data
+      - "9001:9001"
+    command: server /data --console-address ":9001"
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - minio_data:/data
 
   api-gateway:
     build:
@@ -70,9 +96,31 @@ services:
       - "8080:8080"
       - "8081:8081"
     depends_on:
-      - postgres
-      - kafka
-      - elasticsearch
-      - minio
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      kafka:
+        condition: service_started
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    environment:
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/political_data
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+
+volumes:
+  postgres_data:
+  elasticsearch_data:
+  minio_data:

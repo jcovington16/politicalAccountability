@@ -1,0 +1,213 @@
+# Political Accountability App - Development Makefile
+
+.PHONY: help build test clean run deploy health-check docker-build docker-run db-status db-migrate db-validate db-history db-rollback db-new db-tag ingest-local dashboard-install dashboard-dev dashboard-build mobile-install mobile-start mobile-typecheck
+
+# Default target
+help:
+	@echo "Political Accountability App - Development Commands"
+	@echo "=================================================="
+	@echo ""
+	@echo "Build & Test:"
+	@echo "  build          - Build the application"
+	@echo "  test           - Run unit tests"
+	@echo "  test-integration - Run integration tests"
+	@echo "  test-coverage  - Generate test coverage report"
+	@echo "  clean          - Clean build artifacts"
+	@echo ""
+	@echo "Development:"
+	@echo "  run            - Run the application locally"
+	@echo "  dev            - Start development environment"
+	@echo "  stop           - Stop development environment"
+	@echo "  ingest-local dir=x - Import local CSV/JSON files"
+	@echo "  dashboard-dev  - Run React dashboard"
+	@echo "  dashboard-build - Build React dashboard"
+	@echo "  mobile-start   - Run React Native/Expo mobile app"
+	@echo "  mobile-typecheck - Type-check mobile app"
+	@echo ""
+	@echo "Docker:"
+	@echo "  docker-build   - Build Docker image"
+	@echo "  docker-run     - Run application in Docker"
+	@echo "  docker-clean   - Clean Docker images and containers"
+	@echo ""
+	@echo "Deployment:"
+	@echo "  deploy         - Deploy to staging"
+	@echo "  deploy-prod    - Deploy to production"
+	@echo "  health-check   - Run health checks"
+	@echo ""
+	@echo "Quality:"
+	@echo "  security-scan  - Run security vulnerability scan"
+	@echo "  lint           - Run code linting"
+	@echo "  format         - Format code"
+	@echo ""
+	@echo "Database:"
+	@echo "  db-status      - Show pending Liquibase migrations"
+	@echo "  db-migrate     - Apply pending Liquibase migrations"
+	@echo "  db-validate    - Validate Liquibase changelogs"
+	@echo "  db-history     - Show applied migration history"
+	@echo "  db-rollback    - Roll back the most recent migration"
+	@echo "  db-new name=x  - Create a new timestamped migration"
+	@echo "  db-tag tag=x   - Tag the current database state"
+
+# Build targets
+build:
+	@echo "🔨 Building application..."
+	./gradlew clean build shadowJar
+
+test:
+	@echo "🧪 Running unit tests..."
+	./gradlew test
+
+test-integration:
+	@echo "🧪 Running integration tests..."
+	./gradlew integrationTest
+
+test-coverage:
+	@echo "📊 Generating test coverage report..."
+	./gradlew testCoverage
+	@echo "Coverage report available at: build/reports/jacoco/test/html/index.html"
+
+clean:
+	@echo "🧹 Cleaning build artifacts..."
+	./gradlew clean
+	docker system prune -f
+
+# Development targets
+run:
+	@echo "🚀 Starting application..."
+	./gradlew :api-gateway:run
+
+dev:
+	@echo "🏗️ Starting development environment..."
+	docker-compose up -d
+	@echo "⏳ Waiting for services to start..."
+	sleep 30
+	@echo "✅ Development environment ready!"
+	@echo "📊 Services:"
+	@echo "  - API Gateway: http://localhost:8080"
+	@echo "  - PostgreSQL: localhost:5432"
+	@echo "  - Elasticsearch: http://localhost:9200"
+	@echo "  - Kafka: localhost:9092"
+	@echo "  - MinIO: http://localhost:9000"
+
+stop:
+	@echo "🛑 Stopping development environment..."
+	docker-compose down
+
+# Docker targets
+docker-build:
+	@echo "🐳 Building Docker image..."
+	docker build -t political-accountability-app:latest .
+
+docker-run:
+	@echo "🐳 Running application in Docker..."
+	docker-compose up -d
+
+docker-clean:
+	@echo "🧹 Cleaning Docker resources..."
+	docker-compose down -v
+	docker system prune -af
+	docker volume prune -f
+
+# Deployment targets
+deploy:
+	@echo "🚀 Deploying to staging..."
+	./scripts/deploy.sh staging
+
+deploy-prod:
+	@echo "🚀 Deploying to production..."
+	./scripts/deploy.sh production
+
+health-check:
+	@echo "🔍 Running health checks..."
+	./scripts/health-check.sh
+
+# Quality targets
+security-scan:
+	@echo "🔒 Running security vulnerability scan..."
+	./gradlew dependencyCheckAnalyze
+	@echo "Security report available at: build/reports/dependency-check-report.html"
+
+lint:
+	@echo "🔍 Running code linting..."
+	./gradlew checkstyleMain checkstyleTest
+
+format:
+	@echo "✨ Formatting code..."
+	./gradlew ktlintFormat
+
+# CI/CD targets
+ci-build:
+	@echo "🔨 CI Build..."
+	./gradlew clean build shadowJar --no-daemon
+
+ci-test:
+	@echo "🧪 CI Tests..."
+	./gradlew test integrationTest --no-daemon
+
+ci-security:
+	@echo "🔒 CI Security Scan..."
+	./gradlew dependencyCheckAnalyze --no-daemon
+
+# Database targets
+db-status:
+	@echo "Showing database migration status..."
+	./scripts/db/liquibase.sh status --verbose
+
+db-migrate:
+	@echo "Running database migrations..."
+	./scripts/db/liquibase.sh update
+
+db-validate:
+	@echo "Validating database changelogs..."
+	./scripts/db/liquibase.sh validate
+
+db-history:
+	@echo "Showing database migration history..."
+	./scripts/db/liquibase.sh history
+
+db-rollback:
+	@echo "Rolling back the most recent database migration..."
+	./scripts/db/liquibase.sh rollbackCount 1
+
+db-new:
+	@test -n "$(name)" || (echo "Usage: make db-new name=add_short_description" && exit 1)
+	./scripts/db/new-migration.sh "$(name)"
+
+db-tag:
+	@test -n "$(tag)" || (echo "Usage: make db-tag tag=before_content_refactor" && exit 1)
+	./scripts/db/liquibase.sh tag "$(tag)"
+
+db-seed:
+	@echo "🌱 Seeding database..."
+	# Add your database seeding commands here
+
+ingest-local:
+	@test -n "$(dir)" || (echo "Usage: make ingest-local dir=data/ingestion" && exit 1)
+	./gradlew :ingestion-service:runLocalFileIngestion -PinputDir="$(dir)"
+
+dashboard-install:
+	cd dashboard && npm install
+
+dashboard-dev:
+	cd dashboard && npm run dev
+
+dashboard-build:
+	cd dashboard && npm run build
+
+mobile-install:
+	cd mobile && npm install
+
+mobile-start:
+	cd mobile && npm start
+
+mobile-typecheck:
+	cd mobile && npm run typecheck
+
+# Monitoring targets
+logs:
+	@echo "📋 Showing application logs..."
+	docker-compose logs -f api-gateway
+
+metrics:
+	@echo "📊 Application metrics..."
+	curl -s http://localhost:8081/metrics | grep -E "(jvm_|http_|database_)" | head -20

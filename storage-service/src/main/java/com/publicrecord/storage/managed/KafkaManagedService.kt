@@ -15,7 +15,7 @@ class KafkaManagedService(private val kafkaService: KafkaService) : Managed {
 
     override fun stop() {
         logger.info("Stopping Kafka Service...")
-        // Add any cleanup if needed, e.g., closing consumers/producers
+        kafkaService.stop()
         logger.info("Kafka Service stopped successfully.")
     }
 }

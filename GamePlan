@@ -1,0 +1,147 @@
+Here’s a focused 2–4 week milestone plan to deliver a minimal end-to-end slice: ingest YouTube and RSS, transcribe audio, link to one politician profile, index into search, and expose search with provenance.
+
+Goal of the slice
+- Sources: YouTube channel/videos and 1–2 RSS feeds (news or podcasts).
+- Pipeline: Fetch → Normalize → Transcribe (audio/video) → Enrich (NER + link to one politician) → Index → Search.
+- Storage: Originals in object storage; structured metadata in DB; full-text in search.
+- API: Person + keyword query returning results with provenance (URL, timestamps, hash, source).
+- Observability: Logs and simple metrics to see jobs running and messages flowing.
+
+Week 1: Foundations and ingestion MVP
+Objectives
+- Solidify service-to-service connectivity for local/dev.
+- Implement basic connectors for YouTube and RSS that emit normalized content to the event bus.
+- Define minimal schemas and message contracts for the slice.
+
+Deliverables
+- Infra and config
+  - Working local stack with DB, Kafka, object storage, search, API.
+  - Service configs use internal service names (not localhost) and have health endpoints.
+- Canonical models (MVP)
+  - Person: id, name, aliases.
+  - ContentItem: id, source_type (youtube|rss), source_url, published_at, title, raw_text (optional), media_url (optional), language, provenance (capture_time, source_id), content_hash.
+  - Link: person_id ↔ content_item_id with confidence score.
+- YouTube ingestion MVP
+  - Pull recent videos from one specific channel or playlist.
+  - Store media metadata (title, description, published_at, URL), enqueue item to Kafka.
+- RSS ingestion MVP
+  - Subscribe to 1–2 feeds (news/podcasts).
+  - Fetch items and enqueue to Kafka.
+- Persistence
+  - Save ContentItem metadata in DB and raw/full payload in object storage if needed.
+- Observability
+  - Structured logs; counters: items fetched per source, errors, last-run timestamp.
+
+Acceptance criteria (Week 1)
+- Trigger ingestion jobs manually; see items appear in Kafka and stored in DB with provenance.
+- At least 5–10 YouTube items and 10–20 RSS items ingested end-to-end into storage.
+- Each item has: id, source, URL, published_at, content_hash, provenance captured.
+
+Week 2: Transcription, enrichment, and indexing
+Objectives
+- Convert audio/video to text for YouTube (and for RSS episodes with audio).
+- Run NER and simple entity linking to one target politician.
+- Index enriched content in search.
+
+Deliverables
+- Media handling
+  - For YouTube: download audio track (or captions if available) and store in object storage.
+  - Transcription worker: speech-to-text for audio to produce transcript with timestamps; store transcript text + word timecodes if available.
+  - For RSS: if item has an audio enclosure, download and transcribe similarly.
+- NLP enrichment
+  - NER to extract person mentions from transcript/text.
+  - Simple entity linking: map mentions to the target politician via aliases/handles; produce a Link(person_id, content_item_id, confidence).
+- Search indexing
+  - Index document fields: person_ids, media_type, title, text_body (transcript or article), source, published_at, provenance (url, capture time), content_hash.
+  - Analyzer tuned for English; keyword and phrase queries supported; highlight snippets.
+- API endpoints (MVP)
+  - GET /search?personId=&q=&mediaType=&from=&to=
+  - Response contains: title, snippet with highlights, published_at, source, url, transcript segment timestamps if available, and provenance (hash, capture_time).
+
+Acceptance criteria (Week 2)
+- For YouTube videos: text transcripts available and searchable.
+- For RSS items with audio: transcripts available and searchable (at least one example).
+- Searching by personId + keyword returns results with highlighted snippets and provenance.
+- Index shows at least 30 documents (combined RSS + YouTube), with >90% of YouTube items transcribed successfully.
+
+Week 3: Scheduling, reliability, and provenance hardening
+Objectives
+- Automate jobs; add minimal reliability and observability.
+- Strengthen provenance and idempotency.
+
+Deliverables
+- Scheduling
+  - Interval-based jobs per source (e.g., every 30–60 minutes) or cron-like scheduling.
+  - Configurable per-source backoff and rate limits.
+- Reliability patterns
+  - Idempotency keys based on stable content hashes or source IDs; prevent duplicate inserts.
+  - DLQ (dead-letter topic) for failed processing steps with retry policy.
+- Provenance hardening
+  - SHA-256 for stored originals and normalized text stored alongside records.
+  - Persist source response IDs (videoId, GUID) and capture timestamps.
+- Observability
+  - Health endpoints exposing last successful run, queue lag per topic, counts of failures/retries.
+  - Minimal dashboard or logs with clear operator messages.
+
+Acceptance criteria (Week 3)
+- Scheduler runs without manual triggers; logs show periodic ingestion and processing.
+- Re-running jobs does not create duplicates; idempotency verified by stable counts.
+- Failed items appear in DLQ and can be retried successfully.
+- Each search result includes provenance fields: source URL, capture_time, content_hash.
+
+Week 4: UX polish, demo, and hardening (optional but recommended)
+Objectives
+- Improve search relevance/UX and prepare a coherent demo.
+- Add quality-of-life features and guardrails.
+
+Deliverables
+- Search UX and relevance
+  - Phrase matching and keyword highlights reliable.
+  - Filters: mediaType, date range, source.
+  - Sort by recency or relevance.
+- Person linking refinements
+  - Expand alias list; apply simple rules for precision (e.g., require co-occurrence with office/state keywords).
+  - Provide a confidence threshold in the API; optionally return matches below threshold marked as “low confidence.”
+- Admin/ops tooling
+  - Endpoint to reindex content by source or date range.
+  - Endpoint to reingest a single source item by URL/ID for debugging.
+- Demo script
+  - Scenario: Search a specific politician by name; query “carbon tax,” “border wall,” or similar; show results from YouTube and RSS with snippets, timestamps, and links; show provenance hashes and raw link.
+  - Show scheduled jobs running and new content appearing in search without redeploys.
+
+Acceptance criteria (Week 4)
+- Demo runs end-to-end in under 10 minutes on a clean environment.
+- Operator can reprocess a failed item and see it appear in search.
+- Queries retrieve expected records with accurate highlights and provenance.
+
+Roles and responsibilities
+- Backend engineer: connectors, message contracts, jobs, persistence, indexing, API.
+- ML/NLP engineer: ASR configuration, NER, entity linking rules.
+- DevOps engineer: local stack reliability, compose/k8s configs, logs/metrics.
+- QA/Analyst: test data curation, acceptance testing, demo validation.
+
+Success metrics for the slice
+- Coverage: ≥80% of new YouTube uploads from the target channel processed within 15 minutes.
+- Transcription quality: WER acceptable for demo; manual spot-check transcripts for 3 videos and 3 podcast items.
+- Linking precision: ≥90% precision for the single target politician (recall less critical in MVP).
+- Search latency: <500 ms for typical queries on the dataset size in MVP.
+- Reliability: <5% failed jobs; DLQ empties after retries within the hour.
+
+Risks and mitigations
+- Source API limits/changes: Use stable official APIs or RSS where possible; add exponential backoff and caching.
+- ASR accuracy: Favor high-quality models; ensure clean audio extraction; consider captions if available for YouTube.
+- Entity linking errors: Start with tight alias lists and conservative thresholds; log low-confidence matches for review.
+- Duplication: Enforce idempotency via source IDs + content hashing.
+- Legal/ToS: Respect robots.txt and platform policies; log source metadata to demonstrate compliance.
+
+Stretch goals (if time permits)
+- Quote extraction: Detect and index direct quotes with speaker attribution and timestamps.
+- Segment-level indexing: Index transcript segments with timecodes for precise playback.
+- UI layer: Simple web UI for search, filters, and preview of transcripts with jump-to-time.
+
+What I need from you to start
+- The target politician (name + aliases + social handle) for Week 2 linking.
+- 1 YouTube channel or playlist URL and 1–2 RSS feed URLs to prioritize.
+- Acceptance keywords/queries you care about for the demo.
+
+If you’d like, I can translate this into tracked tickets with detailed acceptance tests per task, plus a demo script/checklist you can hand to stakeholders.

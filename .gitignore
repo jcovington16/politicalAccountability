@@ -1,5 +1,12 @@
 .gradle
 build/
+.env
+*.local
+node_modules/
+dist/
+*.tsbuildinfo
+dashboard/vite.config.js
+dashboard/vite.config.d.ts
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/

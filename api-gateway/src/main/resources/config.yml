@@ -18,17 +18,15 @@ logging:
       timeZone: UTC
       threshold: INFO
 
-databaseUrl: jdbc:postgresql://postgres:5432/political_data
-databaseUser: "postgres"
-databasePassword: "postgres"
+# Local Docker defaults live in AppConfig. In shared environments, provide
+# DATABASE_URL, DATABASE_USER, and DATABASE_PASSWORD through environment config.
 databaseDriverClass: org.postgresql.Driver
 databaseMaxConnections: 10
 
-kafkaBootstrapServers: "localhost:9092"
-
-elasticsearchHost: "http://localhost:9200"
-
-minioEndpoint: "http://localhost:9000"
-minioAccessKey: "minioadmin"
-minioSecretKey: "minioadmin"
 minioBucket: "political-media"
+
+cors:
+  allowedOrigins: "http://localhost:3000,http://localhost:5173"
+  allowedMethods: "OPTIONS,GET,HEAD"
+  allowedHeaders: "X-Requested-With,Content-Type,Accept,Origin"
+  allowCredentials: false
