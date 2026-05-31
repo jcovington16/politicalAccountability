@@ -1,5 +1,6 @@
 import type {
   Bill,
+  BillVote,
   Citation,
   Politician,
   SecurityControl,
@@ -32,6 +33,18 @@ export const samplePoliticians: Politician[] = [
       'Legislator focused on housing affordability, public records reform, and consumer data protection.',
     profileImageUrl: '',
     startDate: '2021-01-04',
+  },
+  {
+    id: '550e8400-e29b-41d4-a716-446655440002',
+    firstName: 'Taylor',
+    lastName: 'Morgan',
+    party: 'Republican',
+    state: 'CO',
+    office: 'U.S. Representative Candidate',
+    biography:
+      'Former emergency management director focused on disaster response authority, business regulation, and infrastructure resilience.',
+    profileImageUrl: '',
+    startDate: '2026-01-01',
   },
 ];
 
@@ -71,6 +84,9 @@ export const sampleBills: Bill[] = [
     billNumber: 'HR-204',
     title: 'Public Contract Disclosure Act',
     description: 'Requires machine-readable publication of state and federal procurement awards.',
+    sponsor: 'Alex Rivera',
+    chamber: 'U.S. House',
+    jurisdiction: 'Federal',
     status: 'Passed',
     introducedDate: '2026-01-22',
     lastActionDate: '2026-04-18',
@@ -80,6 +96,9 @@ export const sampleBills: Bill[] = [
     billNumber: 'HR-311',
     title: 'Emergency Procurement Exception Expansion',
     description: 'Expands noncompetitive purchasing windows during emergency declarations.',
+    sponsor: 'Taylor Morgan',
+    chamber: 'U.S. House',
+    jurisdiction: 'Federal',
     status: 'Pending',
     introducedDate: '2026-02-02',
     lastActionDate: '2026-03-09',
@@ -89,11 +108,86 @@ export const sampleBills: Bill[] = [
     billNumber: 'S-78',
     title: 'Election Infrastructure Grants',
     description: 'Funds county-level ballot tracking and public audit dashboards.',
+    sponsor: 'Alex Rivera',
+    chamber: 'U.S. Senate',
+    jurisdiction: 'Federal',
     status: 'Passed',
     introducedDate: '2026-01-12',
     lastActionDate: '2026-02-14',
   },
 ];
+
+export const sampleBillVotes: Record<string, BillVote[]> = {
+  'bill-1': [
+    {
+      id: 'bill-vote-1',
+      politicianId: samplePoliticians[0].id,
+      politicianName: 'Alex Rivera',
+      party: 'Independent',
+      state: 'CO',
+      voteType: 'YEA',
+      voteDate: '2026-04-18',
+    },
+    {
+      id: 'bill-vote-2',
+      politicianId: samplePoliticians[1].id,
+      politicianName: 'Morgan Lee',
+      party: 'Democratic',
+      state: 'CA',
+      voteType: 'YEA',
+      voteDate: '2026-04-18',
+    },
+    {
+      id: 'bill-vote-3',
+      politicianId: samplePoliticians[2].id,
+      politicianName: 'Taylor Morgan',
+      party: 'Republican',
+      state: 'CO',
+      voteType: 'NAY',
+      voteDate: '2026-04-18',
+    },
+  ],
+  'bill-2': [
+    {
+      id: 'bill-vote-4',
+      politicianId: samplePoliticians[0].id,
+      politicianName: 'Alex Rivera',
+      party: 'Independent',
+      state: 'CO',
+      voteType: 'NAY',
+      voteDate: '2026-03-09',
+    },
+    {
+      id: 'bill-vote-5',
+      politicianId: samplePoliticians[2].id,
+      politicianName: 'Taylor Morgan',
+      party: 'Republican',
+      state: 'CO',
+      voteType: 'YEA',
+      voteDate: '2026-03-09',
+    },
+  ],
+  'bill-3': [
+    {
+      id: 'bill-vote-6',
+      politicianId: samplePoliticians[0].id,
+      politicianName: 'Alex Rivera',
+      party: 'Independent',
+      state: 'CO',
+      voteType: 'YEA',
+      voteDate: '2026-02-14',
+    },
+    {
+      id: 'bill-vote-7',
+      politicianId: samplePoliticians[1].id,
+      politicianName: 'Morgan Lee',
+      party: 'Democratic',
+      state: 'CA',
+      voteType: 'YEA',
+      voteDate: '2026-02-14',
+    },
+  ],
+};
 
 export const sampleStatements: Statement[] = [
   {

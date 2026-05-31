@@ -17,6 +17,9 @@ export type Bill = {
   title: string;
   description?: string;
   introducedBy?: string;
+  sponsor?: string;
+  chamber?: string;
+  jurisdiction?: string;
   status: 'Pending' | 'Passed' | 'Failed' | 'Vetoed';
   introducedDate: string;
   lastActionDate?: string;
@@ -29,6 +32,16 @@ export type VotingRecord = {
   billId: string;
   billNumber?: string;
   billTitle?: string;
+  voteType: 'YEA' | 'NAY' | 'ABSTAIN';
+  voteDate: string;
+};
+
+export type BillVote = {
+  id: string;
+  politicianId: string;
+  politicianName: string;
+  party: string;
+  state: string;
   voteType: 'YEA' | 'NAY' | 'ABSTAIN';
   voteDate: string;
 };

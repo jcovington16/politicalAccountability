@@ -15,10 +15,11 @@ import {
   UserRound,
   Vote,
 } from 'lucide-react';
-import { searchPoliticians } from './api';
+import { searchBills as searchBillsApi, searchPoliticians } from './api';
 import {
   accomplishments,
   controversies,
+  sampleBillVotes,
   sampleBills,
   sampleCitations,
   samplePoliticians,
@@ -27,8 +28,10 @@ import {
   securityControls,
   timeline,
 } from './mockData';
-import type { Bill, Politician, SecurityControl } from './types';
+import type { Bill, BillVote, Politician, SecurityControl } from './types';
 import './styles.css';
+
+type View = 'search' | 'bills' | 'saved' | 'profile' | 'billDetail';
 
 const tabs = [
   'Overview',
@@ -44,17 +47,24 @@ const tabs = [
 type Tab = (typeof tabs)[number];
 
 function App() {
+  const [view, setView] = useState<View>('search');
   const [activeTab, setActiveTab] = useState<Tab>('Overview');
   const [query, setQuery] = useState('');
+  const [billQuery, setBillQuery] = useState('');
   const [selected, setSelected] = useState<Politician>(samplePoliticians[0]);
+  const [selectedBill, setSelectedBill] = useState<Bill>(sampleBills[0]);
+  const [savedIds, setSavedIds] = useState<string[]>([samplePoliticians[0].id]);
   const [results, setResults] = useState<Politician[]>(samplePoliticians);
+  const [billResults, setBillResults] = useState<Bill[]>(sampleBills);
   const [apiState, setApiState] = useState('Using sample dashboard data');
+  const [billApiState, setBillApiState] = useState('Using sample dashboard bill data');
 
   async function runSearch() {
     const trimmed = query.trim();
     if (!trimmed) {
       setResults(samplePoliticians);
       setApiState('Using sample dashboard data');
+      setView('search');
       return;
     }
 
@@ -64,9 +74,11 @@ function App() {
         setResults(found);
         setSelected(found[0]);
         setApiState('Connected to API');
+        setView('search');
       } else {
         setResults([]);
         setApiState('No API matches found');
+        setView('search');
       }
     } catch {
       const local = samplePoliticians.filter((p) =>
@@ -77,11 +89,51 @@ function App() {
       setResults(local);
       if (local[0]) setSelected(local[0]);
       setApiState('API unavailable, filtered sample data');
+      setView('search');
     }
   }
 
   const supported = sampleVotes.filter((vote) => vote.voteType === 'YEA');
   const opposed = sampleVotes.filter((vote) => vote.voteType === 'NAY');
+
+  function openPolitician(politician: Politician) {
+    setSelected(politician);
+    setActiveTab('Overview');
+    setView('profile');
+  }
+
+  function openBill(bill: Bill) {
+    setSelectedBill(bill);
+    setView('billDetail');
+  }
+
+  function toggleSaved(id: string) {
+    setSavedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  }
+
+  async function runBillSearch() {
+    const trimmed = billQuery.trim();
+    setBillQuery(trimmed);
+    setView('bills');
+
+    if (!trimmed) {
+      setBillResults(sampleBills);
+      setBillApiState('Using sample dashboard bill data');
+      return;
+    }
+
+    try {
+      const found = await searchBillsApi(trimmed);
+      setBillResults(found);
+      setBillApiState(found.length > 0 ? 'Connected to API' : 'No API matches found');
+      if (found[0]) setSelectedBill(found[0]);
+    } catch {
+      const local = filterSampleBills(trimmed);
+      setBillResults(local);
+      setBillApiState('API unavailable, filtered sample bill data');
+      if (local[0]) setSelectedBill(local[0]);
+    }
+  }
 
   return (
     <div className="app-shell">
@@ -94,33 +146,71 @@ function App() {
           </div>
         </div>
 
-        <div className="search-block">
-          <label htmlFor="politician-search">Politician search</label>
-          <div className="search-row">
-            <Search size={18} aria-hidden="true" />
-            <input
-              id="politician-search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
+        <nav className="entry-list" aria-label="Primary app sections">
+          <button type="button" className={view === 'search' ? 'active' : ''} onClick={() => setView('search')}>Search</button>
+          <button type="button" className={view === 'bills' ? 'active' : ''} onClick={() => setView('bills')}>Bills</button>
+          <button type="button" className={view === 'saved' ? 'active' : ''} onClick={() => setView('saved')}>Saved</button>
+        </nav>
+
+        {view !== 'bills' && (
+          <div className="search-block">
+            <label htmlFor="politician-search">Politician search</label>
+            <div className="search-row">
+              <Search size={18} aria-hidden="true" />
+              <input
+                id="politician-search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              onFocus={() => setView('search')}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') runSearch();
               }}
-              placeholder="Name, state, office"
-            />
-            <button type="button" onClick={runSearch} title="Search politicians">
-              <FileSearch size={18} aria-hidden="true" />
-            </button>
+                placeholder="Name, state, office"
+              />
+              <button type="button" onClick={runSearch} title="Search politicians">
+                <FileSearch size={18} aria-hidden="true" />
+              </button>
+            </div>
+            <p>{apiState}</p>
           </div>
-          <p>{apiState}</p>
-        </div>
+        )}
 
-        <div className="result-list">
+        {view === 'bills' && (
+          <div className="search-block">
+            <label htmlFor="bill-search">Bill search</label>
+            <div className="search-row">
+              <Search size={18} aria-hidden="true" />
+              <input
+                id="bill-search"
+                value={billQuery}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setBillQuery(value);
+                  setBillResults(filterSampleBills(value));
+                  setBillApiState(value.trim() ? 'Filtering sample bill data' : 'Using sample dashboard bill data');
+                }}
+                onFocus={() => setView('bills')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') runBillSearch();
+                }}
+                placeholder="Bill number, title, sponsor"
+              />
+              <button type="button" onClick={runBillSearch} title="Search bills">
+                <FileSearch size={18} aria-hidden="true" />
+              </button>
+            </div>
+            <p>{billApiState}</p>
+          </div>
+        )}
+
+        {view !== 'bills' && (
+          <div className="result-list">
           {results.map((politician) => (
             <button
               key={politician.id}
               className={politician.id === selected.id ? 'selected result-item' : 'result-item'}
               type="button"
-              onClick={() => setSelected(politician)}
+              onClick={() => openPolitician(politician)}
             >
               <span>{politician.firstName[0]}{politician.lastName[0]}</span>
               <div>
@@ -129,9 +219,24 @@ function App() {
               </div>
             </button>
           ))}
-        </div>
+          </div>
+        )}
 
-        <nav className="tab-list" aria-label="Dashboard sections">
+        {view === 'bills' && (
+          <div className="result-list">
+            {billResults.map((bill) => (
+              <button key={bill.id} type="button" className={bill.id === selectedBill.id ? 'selected result-item' : 'result-item'} onClick={() => openBill(bill)}>
+                <span>{bill.billNumber.split('-')[0]}</span>
+                <div>
+                  <strong>{bill.billNumber}</strong>
+                  <small>{bill.title}</small>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {view === 'profile' && <nav className="tab-list" aria-label="Dashboard sections">
           {tabs.map((tab) => (
             <button
               key={tab}
@@ -142,25 +247,43 @@ function App() {
               {tab}
             </button>
           ))}
-        </nav>
+        </nav>}
       </aside>
 
       <main className="content">
-        <Header politician={selected} />
-        {activeTab === 'Overview' && <Overview politician={selected} />}
-        {activeTab === 'Votes' && <Votes supportedCount={supported.length} opposedCount={opposed.length} />}
-        {activeTab === 'Bills' && <Bills />}
-        {activeTab === 'Statements' && <Statements />}
-        {activeTab === 'Controversies' && <Controversies />}
-        {activeTab === 'Citations' && <Citations />}
-        {activeTab === 'Timeline' && <Timeline />}
-        {activeTab === 'Security' && <SecurityArchitecture />}
+        {view === 'search' && <SearchLanding results={results} onOpenPolitician={openPolitician} />}
+        {view === 'saved' && <SavedPoliticians savedIds={savedIds} onOpenPolitician={openPolitician} />}
+        {view === 'bills' && <BillSearchLanding bills={billResults} onOpenBill={openBill} />}
+        {view === 'billDetail' && <BillDetail bill={selectedBill} onBack={() => setView('bills')} onOpenPolitician={openPolitician} />}
+        {view === 'profile' && (
+          <>
+            <Header politician={selected} saved={savedIds.includes(selected.id)} onToggleSaved={() => toggleSaved(selected.id)} />
+            {activeTab === 'Overview' && <Overview politician={selected} />}
+            {activeTab === 'Votes' && <Votes supportedCount={supported.length} opposedCount={opposed.length} onOpenBill={openBill} />}
+            {activeTab === 'Bills' && <Bills onOpenBill={openBill} />}
+            {activeTab === 'Statements' && <Statements />}
+            {activeTab === 'Controversies' && <Controversies />}
+            {activeTab === 'Citations' && <Citations />}
+            {activeTab === 'Timeline' && <Timeline />}
+            {activeTab === 'Security' && <SecurityArchitecture />}
+          </>
+        )}
       </main>
     </div>
   );
 }
 
-function Header({ politician }: { politician: Politician }) {
+function filterSampleBills(query: string): Bill[] {
+  const value = query.trim().toLowerCase();
+  if (!value) return sampleBills;
+  return sampleBills.filter((bill) =>
+    `${bill.billNumber} ${bill.title} ${bill.description ?? ''} ${bill.sponsor ?? ''} ${bill.status}`
+      .toLowerCase()
+      .includes(value),
+  );
+}
+
+function Header({ politician, saved, onToggleSaved }: { politician: Politician; saved: boolean; onToggleSaved: () => void }) {
   return (
     <section className="profile-header">
       <div className="avatar" aria-hidden="true">
@@ -175,6 +298,7 @@ function Header({ politician }: { politician: Politician }) {
         <Metric label="Trust avg" value="82%" tone="good" />
         <Metric label="Citations" value="41" />
         <Metric label="Open risks" value="3" tone="warn" />
+        <button type="button" className="primary-action" onClick={onToggleSaved}>{saved ? 'Saved' : 'Save'}</button>
       </div>
     </section>
   );
@@ -186,6 +310,67 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: '
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function SearchLanding({ results, onOpenPolitician }: { results: Politician[]; onOpenPolitician: (politician: Politician) => void }) {
+  return (
+    <section className="stack">
+      <div className="hero-panel">
+        <div className="eyebrow">Neutral public record</div>
+        <h1>Search who represents you.</h1>
+        <p>Find state and federal politicians, then review what they voted for, sponsored, said, and had reported about them.</p>
+      </div>
+      <Panel title="Politicians" icon={<UserRound size={18} />}>
+        <div className="card-list">
+          {results.map((politician) => (
+            <button key={politician.id} type="button" className="record-card" onClick={() => onOpenPolitician(politician)}>
+              <span className="small-avatar">{politician.firstName[0]}{politician.lastName[0]}</span>
+              <div>
+                <strong>{politician.firstName} {politician.lastName}</strong>
+                <small>{politician.office} · {politician.state} · {politician.party}</small>
+              </div>
+            </button>
+          ))}
+        </div>
+      </Panel>
+    </section>
+  );
+}
+
+function SavedPoliticians({ savedIds, onOpenPolitician }: { savedIds: string[]; onOpenPolitician: (politician: Politician) => void }) {
+  const saved = samplePoliticians.filter((politician) => savedIds.includes(politician.id));
+
+  return (
+    <Panel title="Saved Politicians" icon={<BadgeCheck size={18} />}>
+      <div className="card-list">
+        {saved.map((politician) => (
+          <button key={politician.id} type="button" className="record-card" onClick={() => onOpenPolitician(politician)}>
+            <span className="small-avatar">{politician.firstName[0]}{politician.lastName[0]}</span>
+            <div>
+              <strong>{politician.firstName} {politician.lastName}</strong>
+              <small>{politician.office} · {politician.state}</small>
+            </div>
+          </button>
+        ))}
+        {saved.length === 0 && <p className="body-copy">No saved politicians yet.</p>}
+      </div>
+    </Panel>
+  );
+}
+
+function BillSearchLanding({ bills, onOpenBill }: { bills: Bill[]; onOpenBill: (bill: Bill) => void }) {
+  return (
+    <section className="stack">
+      <div className="hero-panel">
+        <div className="eyebrow">Legislation lookup</div>
+        <h1>Search bills and votes.</h1>
+        <p>Look up a bill, see who introduced it, when it moved, and how politicians voted.</p>
+      </div>
+      <Panel title="Bills" icon={<BookOpen size={18} />}>
+        <BillList bills={bills} onOpenBill={onOpenBill} />
+      </Panel>
+    </section>
   );
 }
 
@@ -232,7 +417,7 @@ function Overview({ politician }: { politician: Politician }) {
   );
 }
 
-function Votes({ supportedCount, opposedCount }: { supportedCount: number; opposedCount: number }) {
+function Votes({ supportedCount, opposedCount, onOpenBill }: { supportedCount: number; opposedCount: number; onOpenBill: (bill: Bill) => void }) {
   return (
     <section className="stack">
       <div className="summary-strip">
@@ -241,21 +426,25 @@ function Votes({ supportedCount, opposedCount }: { supportedCount: number; oppos
         <Metric label="Abstained" value="0" />
       </div>
       <Panel title="Voting Record" icon={<Vote size={18} />}>
-        <DataTable
-          columns={['Date', 'Bill', 'Title', 'Vote']}
-          rows={sampleVotes.map((vote) => [
-            vote.voteDate,
-            vote.billNumber ?? vote.billId,
-            vote.billTitle ?? 'Unknown bill',
-            vote.voteType,
-          ])}
-        />
+        <div className="card-list">
+          {sampleVotes.map((vote) => {
+            const bill = sampleBills.find((item) => item.id === vote.billId);
+            return (
+              <button key={vote.id} type="button" className="vote-card" onClick={() => bill && onOpenBill(bill)}>
+                <time>{vote.voteDate}</time>
+                <strong>{vote.billNumber ?? vote.billId}</strong>
+                <span>{vote.billTitle ?? 'Unknown bill'}</span>
+                <i className={vote.voteType === 'YEA' ? 'good' : vote.voteType === 'NAY' ? 'warn' : ''}>{vote.voteType}</i>
+              </button>
+            );
+          })}
+        </div>
       </Panel>
     </section>
   );
 }
 
-function Bills() {
+function Bills({ onOpenBill }: { onOpenBill: (bill: Bill) => void }) {
   const grouped = useMemo(() => ({
     supported: sampleBills.filter((bill) => sampleVotes.some((vote) => vote.billId === bill.id && vote.voteType === 'YEA')),
     opposed: sampleBills.filter((bill) => sampleVotes.some((vote) => vote.billId === bill.id && vote.voteType === 'NAY')),
@@ -264,29 +453,107 @@ function Bills() {
   return (
     <section className="grid two">
       <Panel title="Bills Supported" icon={<BookOpen size={18} />}>
-        <BillList bills={grouped.supported} />
+        <BillList bills={grouped.supported} onOpenBill={onOpenBill} />
       </Panel>
       <Panel title="Bills Opposed" icon={<BookOpen size={18} />}>
-        <BillList bills={grouped.opposed} />
+        <BillList bills={grouped.opposed} onOpenBill={onOpenBill} />
       </Panel>
     </section>
   );
 }
 
-function BillList({ bills }: { bills: Bill[] }) {
+function BillList({ bills, onOpenBill }: { bills: Bill[]; onOpenBill: (bill: Bill) => void }) {
   return (
     <div className="bill-list">
       {bills.map((bill) => (
-        <article key={bill.id}>
+        <button key={bill.id} type="button" className="bill-card" onClick={() => onOpenBill(bill)}>
           <div>
             <strong>{bill.billNumber}</strong>
             <span>{bill.status}</span>
           </div>
           <h3>{bill.title}</h3>
           <p>{bill.description}</p>
-          <small>Introduced {bill.introducedDate}</small>
-        </article>
+          <small>Introduced {bill.introducedDate} · Sponsor: {bill.sponsor ?? 'Unknown'}</small>
+        </button>
       ))}
+    </div>
+  );
+}
+
+function BillDetail({
+  bill,
+  onBack,
+  onOpenPolitician,
+}: {
+  bill: Bill;
+  onBack: () => void;
+  onOpenPolitician: (politician: Politician) => void;
+}) {
+  const votes = sampleBillVotes[bill.id] ?? [];
+  const yea = votes.filter((vote) => vote.voteType === 'YEA');
+  const nay = votes.filter((vote) => vote.voteType === 'NAY');
+  const abstain = votes.filter((vote) => vote.voteType === 'ABSTAIN');
+
+  return (
+    <section className="stack">
+      <button type="button" className="text-action" onClick={onBack}>Back to bills</button>
+      <section className="profile-header">
+        <div className="bill-avatar" aria-hidden="true">{bill.billNumber.split('-')[0]}</div>
+        <div>
+          <div className="eyebrow">{bill.jurisdiction ?? 'Federal'} · {bill.chamber ?? 'Legislature'}</div>
+          <h1>{bill.billNumber}</h1>
+          <p>{bill.title}</p>
+        </div>
+        <div className="header-metrics">
+          <Metric label="For" value={String(yea.length)} tone="good" />
+          <Metric label="Against" value={String(nay.length)} tone="warn" />
+          <Metric label="Abstain" value={String(abstain.length)} />
+        </div>
+      </section>
+
+      <section className="grid two">
+        <Panel title="Legislation Details" icon={<BookOpen size={18} />}>
+          <p className="body-copy">{bill.description}</p>
+          <div className="fact-grid">
+            <Fact label="Status" value={bill.status} />
+            <Fact label="Sponsor" value={bill.sponsor} />
+            <Fact label="Introduced" value={bill.introducedDate} />
+            <Fact label="Last action" value={bill.lastActionDate} />
+          </div>
+        </Panel>
+        <Panel title="Source" icon={<Link size={18} />}>
+          <p className="body-copy">{bill.billUrl ?? 'Official source URL will appear here after API ingestion is normalized.'}</p>
+        </Panel>
+      </section>
+
+      <section className="grid two">
+        <Panel title="Votes For" icon={<Vote size={18} />}>
+          <BillVoteList votes={yea} onOpenPolitician={onOpenPolitician} />
+        </Panel>
+        <Panel title="Votes Against" icon={<Vote size={18} />}>
+          <BillVoteList votes={nay} onOpenPolitician={onOpenPolitician} />
+        </Panel>
+      </section>
+    </section>
+  );
+}
+
+function BillVoteList({ votes, onOpenPolitician }: { votes: BillVote[]; onOpenPolitician: (politician: Politician) => void }) {
+  return (
+    <div className="card-list">
+      {votes.map((vote) => {
+        const politician = samplePoliticians.find((item) => item.id === vote.politicianId);
+        return (
+          <button key={vote.id} type="button" className="record-card" onClick={() => politician && onOpenPolitician(politician)}>
+            <span className="small-avatar">{vote.politicianName.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span>
+            <div>
+              <strong>{vote.politicianName}</strong>
+              <small>{vote.voteType} · {vote.party} · {vote.state} · {vote.voteDate}</small>
+            </div>
+          </button>
+        );
+      })}
+      {votes.length === 0 && <p className="body-copy">No votes recorded.</p>}
     </div>
   );
 }

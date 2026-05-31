@@ -5,6 +5,7 @@ build/
 node_modules/
 dist/
 *.tsbuildinfo
+mobile/.expo/
 dashboard/vite.config.js
 dashboard/vite.config.d.ts
 !gradle/wrapper/gradle-wrapper.jar

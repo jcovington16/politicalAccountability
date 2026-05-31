@@ -1,0 +1,2 @@
+id,external_id,first_name,last_name,party,state,office,branch,office_level,district,biography,official_url,source_name,source_url,last_verified_at
+11111111-1111-4111-8111-111111111111,bioguide:R000001,Alex,Rivera,Independent,CO,U.S. Representative,LEGISLATIVE,FEDERAL,CO-03,"Former city auditor focused on procurement transparency and election access.",https://example.gov/rivera,Congressional Directory,https://example.gov/congress/rivera,2026-05-29T00:00:00Z

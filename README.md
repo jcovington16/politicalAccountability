@@ -3,6 +3,15 @@
 ## 📌 Overview
 The Political Accountability App is designed to **track and store data** about politicians, their voting history, proposed bills, news articles, and media coverage. The goal is to **provide transparency** by aggregating data from various sources and presenting it in a structured manner.
 
+Core neutrality rule:
+
+```text
+We do not score politicians by ideology.
+We score information by evidence quality.
+```
+
+The current MVP prioritizes state and federal politicians across the executive, legislative, and judicial branches. Local officials remain a planned expansion.
+
 ## 🏗️ Architecture
 The long-term direction is a **microservices architecture**, but the current running application is intentionally simpler while the product and data model are still early-stage.
 
@@ -141,6 +150,21 @@ news_articles: id, politician_id, title, source, published_date, url, content
 Validation is intentionally strict for identifiers and required fields. Invalid rows are skipped and logged; valid rows are upserted. Search indexing failures are logged but do not roll back PostgreSQL imports, because PostgreSQL is the source of truth.
 
 The current schema is **not yet complete** for the full political-accountability domain. It has politicians, bills, votes, media files, content items, provenance, and news articles. Offices, elections, source citations, public-statement-specific records, fact checks, richer tags, and audit history still need dedicated migrations before that model should be considered production-complete.
+
+The Day 1 foundation map is documented in `docs/DAY_1_FOUNDATION.md`.
+
+Day 2 added the first office/election model needed for state and federal scope:
+
+```text
+offices
+politician_offices
+elections
+election_candidates
+```
+
+Identity matching rules are documented in `docs/IDENTITY_MATCHING.md`, and environment variables are inventoried in `docs/ENVIRONMENT.md`.
+
+External API ingestion is documented in `docs/API_INGESTION.md`. The first wired connectors are Congress.gov and GovInfo. Use `make ingest-congress-bills` or `make ingest-govinfo-packages` to inspect raw events, and `make ingest-official-normalized` to write official bills, actions, citations, and import audit rows into PostgreSQL.
 
 ## Trust Scoring
 Political information is classified before it is treated as equally reliable. The current trust scoring model separates:
@@ -332,6 +356,8 @@ Security and integrity controls
 
 The Security tab tracks controls for data integrity, misinformation risk, source manipulation, prompt injection, scraping risks, privacy, authorization, audit logs, and abuse prevention.
 
+The Security tab is an internal builder/admin view. It should not be exposed in the public voter-facing app.
+
 ## React Native Mobile MVP
 The voter mobile MVP lives in `mobile/` and uses Expo so the same codebase can run on iOS, Android, and web preview.
 
@@ -345,16 +371,18 @@ Implemented MVP screens:
 
 ```text
 Search
+Bill search
 Politician profile
 Voting record
 Issue stance
 Timeline
+Bill detail
 Compare two politicians
 Saved politicians
 Source citations
 ```
 
-The app currently uses local sample data that mirrors the React dashboard. The next implementation step is wiring these screens to the Dropwizard API endpoints and production API configuration.
+The app currently uses local sample data that mirrors the React dashboard. Voters can search for politicians, search for bills, open a politician's vote/bill cards, and view a bill detail screen with status, sponsor, dates, source URL, and votes for/against. The next implementation step is wiring these screens to the Dropwizard API endpoints and production API configuration.
 
 App store packaging is configured through `mobile/app.json` and `mobile/eas.json`. Publishing still requires Apple Developer and Google Play accounts, production icons/screenshots, a privacy policy URL, and completed store data-safety forms.
 

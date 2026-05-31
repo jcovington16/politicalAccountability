@@ -67,6 +67,14 @@ jobs:
     - name: Make gradlew executable
       run: chmod +x ./gradlew
 
+    - name: Validate Liquibase changelog
+      run: ./scripts/db/liquibase.sh validate
+      env:
+        DATABASE_URL: jdbc:postgresql://localhost:5432/political_data_test
+        DB_USERNAME: postgres
+        DB_PASSWORD: postgres
+        LIQUIBASE_DOCKER_NETWORK: host
+
     - name: Run tests
       run: ./gradlew clean test --info
       env:

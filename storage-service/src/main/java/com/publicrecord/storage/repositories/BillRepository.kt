@@ -1,6 +1,7 @@
 package com.publicrecord.storage.repositories
 
 import com.publicrecord.common.models.Bill
+import com.publicrecord.common.models.BillAction
 import com.publicrecord.storage.config.DatabaseConfig
 import org.slf4j.LoggerFactory
 import java.sql.ResultSet
@@ -51,6 +52,40 @@ class BillRepository(private val dbConfig: DatabaseConfig) {
             }
         } catch (e: Exception) {
             logger.error("Failed to search bills: {}", e.message, e)
+            emptyList()
+        }
+    }
+
+    fun findActions(billId: UUID, limit: Int = 100): List<BillAction> {
+        return try {
+            dbConfig.getConnection().use { conn ->
+                val sql = """
+                    SELECT * FROM bill_actions
+                    WHERE bill_id = ?
+                    ORDER BY action_date DESC
+                    LIMIT ?
+                """.trimIndent()
+                conn.prepareStatement(sql).use { stmt ->
+                    stmt.setObject(1, billId)
+                    stmt.setInt(2, limit.coerceIn(1, 250))
+                    val rs = stmt.executeQuery()
+                    val results = mutableListOf<BillAction>()
+                    while (rs.next()) {
+                        results.add(
+                            BillAction(
+                                id = rs.getObject("id") as UUID,
+                                billId = rs.getObject("bill_id") as UUID,
+                                actionDate = rs.getObject("action_date", LocalDate::class.java),
+                                actionText = rs.getString("action_text"),
+                                sourceCitationId = rs.getObject("source_citation_id") as UUID?
+                            )
+                        )
+                    }
+                    results
+                }
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to find bill actions billId={}: {}", billId, e.message, e)
             emptyList()
         }
     }

@@ -3,6 +3,7 @@ package com.publicrecord.api.resources;
 import com.publicrecord.api.services.BillService;
 import com.publicrecord.storage.config.DatabaseConfig;
 import com.publicrecord.storage.repositories.BillRepository;
+import com.publicrecord.storage.repositories.SourceCitationRepository;
 import org.junit.jupiter.api.Test;
 
 import javax.ws.rs.core.Response;
@@ -12,7 +13,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BillResourceTest {
 
     private final BillResource resource = new BillResource(
-            new BillService(new BillRepository(dummyDatabaseConfig()))
+            new BillService(
+                    new BillRepository(dummyDatabaseConfig()),
+                    new SourceCitationRepository(dummyDatabaseConfig())
+            )
     );
 
     @Test

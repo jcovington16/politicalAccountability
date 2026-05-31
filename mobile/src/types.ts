@@ -11,8 +11,33 @@ export type Politician = {
 
 export type VoteRecord = {
   id: string;
+  billId: string;
   billNumber: string;
   title: string;
+  vote: 'YEA' | 'NAY' | 'ABSTAIN';
+  date: string;
+};
+
+export type Bill = {
+  id: string;
+  billNumber: string;
+  title: string;
+  summary: string;
+  status: 'Pending' | 'Passed' | 'Failed' | 'Vetoed';
+  introducedDate: string;
+  lastActionDate?: string;
+  sponsor: string;
+  chamber: string;
+  jurisdiction: string;
+  sourceUrl: string;
+};
+
+export type BillVote = {
+  id: string;
+  politicianId: string;
+  politicianName: string;
+  party: string;
+  state: string;
   vote: 'YEA' | 'NAY' | 'ABSTAIN';
   date: string;
 };
@@ -38,4 +63,13 @@ export type Citation = {
   quality: string;
   date: string;
   url: string;
+};
+
+export type Article = {
+  id: string;
+  headline: string;
+  source: string;
+  date: string;
+  summary: string;
+  tone: 'Positive' | 'Controversy' | 'Neutral';
 };

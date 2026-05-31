@@ -20,6 +20,7 @@ import com.publicrecord.storage.config.DatabaseConfig
 import com.publicrecord.storage.repositories.BillRepository
 import com.publicrecord.storage.repositories.ContentItemRepository
 import com.publicrecord.storage.repositories.PoliticianRepository
+import com.publicrecord.storage.repositories.SourceCitationRepository
 import com.publicrecord.storage.repositories.VotingRecordRepository
 import com.publicrecord.storage.managed.DatabaseManagedService
 import com.publicrecord.storage.managed.ElasticSearchManagedService
@@ -63,8 +64,9 @@ class App : Application<AppConfig>() {
         val politicianRepository = PoliticianRepository(databaseConfig)
         val contentItemRepository = ContentItemRepository(databaseConfig)
         val billRepository = BillRepository(databaseConfig)
+        val sourceCitationRepository = SourceCitationRepository(databaseConfig)
         val votingRecordRepository = VotingRecordRepository(databaseConfig)
-        val billService = BillService(billRepository)
+        val billService = BillService(billRepository, sourceCitationRepository)
         val votingRecordService = VotingRecordService(votingRecordRepository)
         val processedContentSinkService = ProcessedContentSinkService(
             kafkaBootstrapServers = config.kafkaBootstrapServers,

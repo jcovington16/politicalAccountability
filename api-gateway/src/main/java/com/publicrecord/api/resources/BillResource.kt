@@ -34,6 +34,32 @@ class BillResource(private val billService: BillService) {
     }
 
     @GET
+    @Path("/{id}/actions")
+    fun getBillActions(
+        @PathParam("id") id: String,
+        @QueryParam("limit") @DefaultValue("100") limit: Int
+    ): Response {
+        return try {
+            Response.ok(billService.findActions(UUID.fromString(id), limit.coerceIn(1, 250))).build()
+        } catch (e: IllegalArgumentException) {
+            Response.status(Response.Status.BAD_REQUEST).entity("Invalid UUID format").build()
+        }
+    }
+
+    @GET
+    @Path("/{id}/citations")
+    fun getBillCitations(
+        @PathParam("id") id: String,
+        @QueryParam("limit") @DefaultValue("100") limit: Int
+    ): Response {
+        return try {
+            Response.ok(billService.findCitations(UUID.fromString(id), limit.coerceIn(1, 250))).build()
+        } catch (e: IllegalArgumentException) {
+            Response.status(Response.Status.BAD_REQUEST).entity("Invalid UUID format").build()
+        }
+    }
+
+    @GET
     @Path("/search")
     fun searchBills(
         @QueryParam("query") query: String?,

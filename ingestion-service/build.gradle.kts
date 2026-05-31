@@ -41,3 +41,31 @@ tasks.register<JavaExec>("runLocalFileIngestion") {
         args(project.property("inputDir").toString())
     }
 }
+
+tasks.register<JavaExec>("runCongressGovBills") {
+    group = "application"
+    description = "Fetch recent Congress.gov bill events and optionally publish them to Kafka"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.publicrecord.ingestion.CongressGovIngestionMainKt")
+}
+
+tasks.register<JavaExec>("runGovInfoPackages") {
+    group = "application"
+    description = "Fetch recent GovInfo package summaries and optionally publish them to Kafka"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.publicrecord.ingestion.GovInfoIngestionMainKt")
+}
+
+tasks.register<JavaExec>("runRawContentLogger") {
+    group = "application"
+    description = "Consume raw-content Kafka events and print them for local verification"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.publicrecord.ingestion.KafkaRawContentLoggerMainKt")
+}
+
+tasks.register<JavaExec>("runOfficialDataNormalization") {
+    group = "application"
+    description = "Fetch official source data and normalize it into PostgreSQL"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.publicrecord.ingestion.OfficialDataNormalizeMainKt")
+}

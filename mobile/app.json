@@ -6,7 +6,9 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "publicrecord",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.publicrecord.voter",
@@ -23,7 +25,11 @@
       }
     },
     "extra": {
-      "apiBaseUrl": "http://localhost:8080"
-    }
+      "apiBaseUrl": "http://localhost:8080",
+      "eas": {
+        "projectId": "b8a4a690-9d6d-4932-8485-cd3782803bc3"
+      }
+    },
+    "owner": "astrodev"
   }
 }

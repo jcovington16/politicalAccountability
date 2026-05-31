@@ -87,6 +87,7 @@ button {
 }
 
 .search-row button,
+.entry-list button,
 .tab-list button {
   border: 0;
   border-radius: 7px;
@@ -105,6 +106,23 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.entry-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.entry-list button {
+  padding: 9px 10px;
+  color: #dce6df;
+  background: #20332c;
+}
+
+.entry-list button.active {
+  color: #102017;
+  background: #c7ead4;
 }
 
 .result-item {
@@ -165,6 +183,24 @@ button {
   padding: 24px;
 }
 
+.hero-panel {
+  padding: 22px;
+  background: #e8f4ed;
+  border: 1px solid #cfe3d7;
+  border-radius: 8px;
+}
+
+.hero-panel h1 {
+  max-width: 620px;
+}
+
+.hero-panel p {
+  max-width: 700px;
+  margin-top: 8px;
+  color: #43524b;
+  line-height: 1.5;
+}
+
 .profile-header {
   display: grid;
   grid-template-columns: 76px minmax(0, 1fr) auto;
@@ -186,6 +222,29 @@ button {
   border-radius: 50%;
   font-size: 24px;
   font-weight: 900;
+}
+
+.bill-avatar,
+.small-avatar {
+  display: grid;
+  place-items: center;
+  color: #102017;
+  background: #b8dfca;
+  border: 1px solid #87b49b;
+  font-weight: 900;
+}
+
+.bill-avatar {
+  width: 76px;
+  height: 76px;
+  border-radius: 8px;
+  font-size: 18px;
+}
+
+.small-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
 }
 
 .eyebrow {
@@ -217,6 +276,26 @@ h1 {
 .summary-strip {
   display: flex;
   gap: 10px;
+}
+
+.primary-action,
+.text-action {
+  border: 0;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.primary-action {
+  min-width: 94px;
+  color: #f8fbf8;
+  background: #13201b;
+}
+
+.text-action {
+  justify-self: start;
+  padding: 0;
+  color: #187048;
+  background: transparent;
 }
 
 .metric {
@@ -358,18 +437,80 @@ h1 {
 
 .mini-timeline,
 .bill-list,
-.timeline {
+.timeline,
+.card-list {
   display: grid;
   gap: 10px;
 }
 
 .mini-timeline div,
-.bill-list article,
+.bill-card,
 .timeline article {
   padding: 12px;
   background: #f7faf8;
   border: 1px solid #e0e8e3;
   border-radius: 8px;
+}
+
+.bill-card,
+.record-card,
+.vote-card {
+  width: 100%;
+  text-align: left;
+}
+
+.bill-card,
+.record-card,
+.vote-card {
+  color: inherit;
+  background: #f7faf8;
+  border: 1px solid #e0e8e3;
+  border-radius: 8px;
+}
+
+.record-card {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+}
+
+.record-card strong,
+.record-card small {
+  display: block;
+}
+
+.record-card small,
+.vote-card span {
+  color: #607168;
+}
+
+.vote-card {
+  display: grid;
+  grid-template-columns: 112px 90px minmax(0, 1fr) 76px;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 12px;
+}
+
+.vote-card i {
+  justify-self: end;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-style: normal;
+  font-weight: 900;
+  background: #e7edf0;
+}
+
+.vote-card i.good {
+  color: #155a3a;
+  background: #e4f4eb;
+}
+
+.vote-card i.warn {
+  color: #842918;
+  background: #ffe1da;
 }
 
 .mini-timeline time,
@@ -408,7 +549,7 @@ th {
   text-transform: uppercase;
 }
 
-.bill-list article > div,
+.bill-card > div,
 .risk-row,
 .control-title {
   display: flex;

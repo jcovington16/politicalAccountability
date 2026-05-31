@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -9,25 +10,21 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { citations, politicians, stances, timeline, votes } from './src/data';
-import type { Politician } from './src/types';
+import { articles, bills, billVotes, citations, politicians, stances, timeline, votes } from './src/data';
+import type { Bill, Politician } from './src/types';
 
-type Screen =
-  | 'Search'
-  | 'Profile'
-  | 'Voting'
-  | 'Issues'
-  | 'Timeline'
-  | 'Compare'
-  | 'Saved'
-  | 'Sources';
+type MainScreen = 'Search' | 'Bills' | 'Profile' | 'Saved' | 'BillDetail';
+type ProfileTab = 'Overview' | 'Votes' | 'Bills' | 'Articles' | 'Issues' | 'Timeline' | 'Compare' | 'Citations';
 
-const screens: Screen[] = ['Search', 'Profile', 'Voting', 'Issues', 'Timeline', 'Compare', 'Saved', 'Sources'];
+const mainScreens: MainScreen[] = ['Search', 'Bills', 'Saved'];
+const profileTabs: ProfileTab[] = ['Overview', 'Votes', 'Bills', 'Articles', 'Issues', 'Timeline', 'Compare', 'Citations'];
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('Search');
+  const [screen, setScreen] = useState<MainScreen>('Search');
+  const [profileTab, setProfileTab] = useState<ProfileTab>('Overview');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Politician>(politicians[0]);
+  const [selectedBill, setSelectedBill] = useState<Bill>(bills[0]);
   const [compare, setCompare] = useState<Politician>(politicians[1]);
   const [saved, setSaved] = useState<string[]>([politicians[0].id]);
 
@@ -41,49 +38,108 @@ export default function App() {
     );
   }, [query]);
 
+  const billResults = useMemo(() => {
+    const value = query.trim().toLowerCase();
+    if (!value) return bills;
+    return bills.filter((bill) =>
+      `${bill.billNumber} ${bill.title} ${bill.summary} ${bill.sponsor} ${bill.status}`
+        .toLowerCase()
+        .includes(value),
+    );
+  }, [query]);
+
   function toggleSaved(id: string) {
     setSaved((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  }
+
+  const appContent = (
+    <View style={[styles.shell, Platform.OS === 'web' && styles.webShell]}>
+      <Header />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.nav}>
+        {mainScreens.map((item) => (
+          <Pressable
+            key={item}
+            onPress={() => setScreen(item)}
+            style={[styles.navButton, screen === item && styles.navButtonActive]}
+          >
+            <Text style={[styles.navText, screen === item && styles.navTextActive]}>{item}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      <ScrollView contentContainerStyle={styles.content}>
+        {screen === 'Search' && (
+          <SearchScreen
+            query={query}
+            setQuery={setQuery}
+            results={results}
+            selected={selected}
+            onSelect={(person) => {
+              setSelected(person);
+              setProfileTab('Overview');
+              setScreen('Profile');
+            }}
+          />
+        )}
+        {screen === 'Profile' && (
+          <PoliticianPage
+            politician={selected}
+            saved={saved.includes(selected.id)}
+            onSave={() => toggleSaved(selected.id)}
+            activeTab={profileTab}
+            setActiveTab={setProfileTab}
+            compare={compare}
+            setCompare={setCompare}
+            onBack={() => setScreen('Search')}
+            onOpenBill={(bill) => {
+              setSelectedBill(bill);
+              setScreen('BillDetail');
+            }}
+          />
+        )}
+        {screen === 'Bills' && (
+          <BillSearchScreen
+            query={query}
+            setQuery={setQuery}
+            results={billResults}
+            onOpenBill={(bill) => {
+              setSelectedBill(bill);
+              setScreen('BillDetail');
+            }}
+          />
+        )}
+        {screen === 'BillDetail' && (
+          <BillDetailScreen
+            bill={selectedBill}
+            onBack={() => setScreen('Bills')}
+            onOpenPolitician={(person) => {
+              setSelected(person);
+              setProfileTab('Overview');
+              setScreen('Profile');
+            }}
+          />
+        )}
+        {screen === 'Saved' && <SavedScreen savedIds={saved} onSelect={(person) => { setSelected(person); setProfileTab('Overview'); setScreen('Profile'); }} />}
+      </ScrollView>
+    </View>
+  );
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.webStage}>
+        <View style={styles.deviceFrame}>
+          <View style={styles.deviceNotch} />
+          {appContent}
+          <View style={styles.deviceHomeIndicator} />
+        </View>
+      </View>
+    );
   }
 
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="light-content" />
-      <View style={styles.shell}>
-        <Header />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.nav}>
-          {screens.map((item) => (
-            <Pressable
-              key={item}
-              onPress={() => setScreen(item)}
-              style={[styles.navButton, screen === item && styles.navButtonActive]}
-            >
-              <Text style={[styles.navText, screen === item && styles.navTextActive]}>{item}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        <ScrollView contentContainerStyle={styles.content}>
-          {screen === 'Search' && (
-            <SearchScreen
-              query={query}
-              setQuery={setQuery}
-              results={results}
-              selected={selected}
-              onSelect={(person) => {
-                setSelected(person);
-                setScreen('Profile');
-              }}
-            />
-          )}
-          {screen === 'Profile' && <ProfileScreen politician={selected} saved={saved.includes(selected.id)} onSave={() => toggleSaved(selected.id)} />}
-          {screen === 'Voting' && <VotingScreen />}
-          {screen === 'Issues' && <IssueScreen />}
-          {screen === 'Timeline' && <TimelineScreen />}
-          {screen === 'Compare' && <CompareScreen selected={selected} compare={compare} setCompare={setCompare} />}
-          {screen === 'Saved' && <SavedScreen savedIds={saved} onSelect={(person) => { setSelected(person); setScreen('Profile'); }} />}
-          {screen === 'Sources' && <SourcesScreen />}
-        </ScrollView>
-      </View>
+      {appContent}
     </SafeAreaView>
   );
 }
@@ -115,6 +171,13 @@ function SearchScreen({
 }) {
   return (
     <View style={styles.stack}>
+      <Card style={styles.searchHero}>
+        <Text style={styles.eyebrow}>Neutral public record</Text>
+        <Text style={styles.heroTitle}>Search who represents you.</Text>
+        <Text style={styles.body}>
+          Find state and federal politicians, then review what they voted for, sponsored, said, and had reported about them.
+        </Text>
+      </Card>
       <Text style={styles.label}>Search politicians</Text>
       <TextInput
         value={query}
@@ -140,22 +203,208 @@ function SearchScreen({
   );
 }
 
-function ProfileScreen({ politician, saved, onSave }: { politician: Politician; saved: boolean; onSave: () => void }) {
+function BillSearchScreen({
+  query,
+  setQuery,
+  results,
+  onOpenBill,
+}: {
+  query: string;
+  setQuery: (value: string) => void;
+  results: Bill[];
+  onOpenBill: (bill: Bill) => void;
+}) {
+  return (
+    <View style={styles.stack}>
+      <Card style={styles.searchHero}>
+        <Text style={styles.eyebrow}>Legislation lookup</Text>
+        <Text style={styles.heroTitle}>Search bills and votes.</Text>
+        <Text style={styles.body}>
+          Look up a bill, see who introduced it, when it moved, and how politicians voted.
+        </Text>
+      </Card>
+      <Text style={styles.label}>Search bills</Text>
+      <TextInput
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Bill number, title, sponsor, topic"
+        placeholderTextColor="#7c8b84"
+        style={styles.input}
+      />
+      {results.map((bill) => (
+        <BillRow key={bill.id} bill={bill} onOpenBill={onOpenBill} />
+      ))}
+    </View>
+  );
+}
+
+function BillRow({ bill, onOpenBill }: { bill: Bill; onOpenBill: (bill: Bill) => void }) {
+  return (
+    <Pressable onPress={() => onOpenBill(bill)} style={styles.personRow}>
+      <View style={styles.billIcon}><Text style={styles.billIconText}>{bill.billNumber.split('-')[0]}</Text></View>
+      <View style={styles.flex}>
+        <View style={styles.split}>
+          <Text style={styles.rowTitle}>{bill.billNumber}</Text>
+          <Badge label={bill.status} tone={bill.status === 'Passed' ? 'good' : 'neutral'} />
+        </View>
+        <Text style={styles.rowSub}>{bill.title}</Text>
+        <Text style={styles.muted}>Sponsor: {bill.sponsor}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function BillDetailScreen({
+  bill,
+  onBack,
+  onOpenPolitician,
+}: {
+  bill: Bill;
+  onBack: () => void;
+  onOpenPolitician: (person: Politician) => void;
+}) {
+  const votesForBill = billVotes[bill.id] ?? [];
+  const yea = votesForBill.filter((vote) => vote.vote === 'YEA');
+  const nay = votesForBill.filter((vote) => vote.vote === 'NAY');
+  const abstain = votesForBill.filter((vote) => vote.vote === 'ABSTAIN');
+
+  return (
+    <View style={styles.stack}>
+      <Pressable onPress={onBack} style={styles.textButton}>
+        <Text style={styles.textButtonLabel}>Back to bills</Text>
+      </Pressable>
+      <Card>
+        <Text style={styles.eyebrow}>{bill.jurisdiction} · {bill.chamber}</Text>
+        <Text style={styles.title}>{bill.billNumber}</Text>
+        <Text style={styles.rowTitle}>{bill.title}</Text>
+        <Text style={styles.body}>{bill.summary}</Text>
+        <Badge label={bill.status} tone={bill.status === 'Passed' ? 'good' : 'neutral'} />
+      </Card>
+      <View style={styles.metricRow}>
+        <Metric label="For" value={`${yea.length}`} good />
+        <Metric label="Against" value={`${nay.length}`} warn />
+        <Metric label="Abstain" value={`${abstain.length}`} />
+      </View>
+      <Card>
+        <Text style={styles.rowTitle}>Legislation Details</Text>
+        <Text style={styles.body}>Introduced by {bill.sponsor}</Text>
+        <Text style={styles.body}>Introduced {bill.introducedDate}</Text>
+        <Text style={styles.body}>Last action {bill.lastActionDate ?? 'Unknown'}</Text>
+        <Text style={styles.body}>{bill.sourceUrl}</Text>
+      </Card>
+      <Text style={styles.label}>Votes For</Text>
+      {yea.map((vote) => <BillVoteRow key={vote.id} vote={vote} onOpenPolitician={onOpenPolitician} />)}
+      <Text style={styles.label}>Votes Against</Text>
+      {nay.map((vote) => <BillVoteRow key={vote.id} vote={vote} onOpenPolitician={onOpenPolitician} />)}
+      {abstain.length > 0 && <Text style={styles.label}>Abstained</Text>}
+      {abstain.map((vote) => <BillVoteRow key={vote.id} vote={vote} onOpenPolitician={onOpenPolitician} />)}
+    </View>
+  );
+}
+
+function BillVoteRow({
+  vote,
+  onOpenPolitician,
+}: {
+  vote: {
+    politicianId: string;
+    politicianName: string;
+    party: string;
+    state: string;
+    vote: 'YEA' | 'NAY' | 'ABSTAIN';
+    date: string;
+  };
+  onOpenPolitician: (person: Politician) => void;
+}) {
+  const politician = politicians.find((person) => person.id === vote.politicianId);
+
+  return (
+    <Pressable disabled={!politician} onPress={() => politician && onOpenPolitician(politician)}>
+    <Card>
+      <View style={styles.split}>
+        <Text style={styles.rowTitle}>{vote.politicianName}</Text>
+        <Badge label={vote.vote} tone={vote.vote === 'YEA' ? 'good' : vote.vote === 'NAY' ? 'warn' : 'neutral'} />
+      </View>
+      <Text style={styles.muted}>{vote.party} · {vote.state} · {vote.date}</Text>
+    </Card>
+    </Pressable>
+  );
+}
+
+function PoliticianPage({
+  politician,
+  saved,
+  onSave,
+  activeTab,
+  setActiveTab,
+  compare,
+  setCompare,
+  onBack,
+  onOpenBill,
+}: {
+  politician: Politician;
+  saved: boolean;
+  onSave: () => void;
+  activeTab: ProfileTab;
+  setActiveTab: (tab: ProfileTab) => void;
+  compare: Politician;
+  setCompare: (person: Politician) => void;
+  onBack: () => void;
+  onOpenBill: (bill: Bill) => void;
+}) {
+  return (
+    <View style={styles.stack}>
+      <Pressable onPress={onBack} style={styles.textButton}>
+        <Text style={styles.textButtonLabel}>Back to search</Text>
+      </Pressable>
+      <ProfileHeader politician={politician} saved={saved} onSave={onSave} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.profileTabs}>
+        {profileTabs.map((tab) => (
+          <Pressable
+            key={tab}
+            onPress={() => setActiveTab(tab)}
+            style={[styles.profileTabButton, activeTab === tab && styles.profileTabButtonActive]}
+          >
+            <Text style={[styles.profileTabText, activeTab === tab && styles.profileTabTextActive]}>{tab}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+      {activeTab === 'Overview' && <ProfileScreen politician={politician} />}
+      {activeTab === 'Votes' && <VotingScreen onOpenBill={onOpenBill} />}
+      {activeTab === 'Bills' && <BillsScreen onOpenBill={onOpenBill} />}
+      {activeTab === 'Articles' && <ArticlesScreen />}
+      {activeTab === 'Issues' && <IssueScreen />}
+      {activeTab === 'Timeline' && <TimelineScreen />}
+      {activeTab === 'Compare' && <CompareScreen selected={politician} compare={compare} setCompare={setCompare} />}
+      {activeTab === 'Citations' && <SourcesScreen />}
+    </View>
+  );
+}
+
+function ProfileHeader({ politician, saved, onSave }: { politician: Politician; saved: boolean; onSave: () => void }) {
+  return (
+    <Card>
+      <View style={styles.profileTop}>
+        <Avatar person={politician} large />
+        <View style={styles.flex}>
+          <Text style={styles.eyebrow}>{politician.party} · {politician.state}</Text>
+          <Text style={styles.title}>{politician.firstName} {politician.lastName}</Text>
+          <Text style={styles.muted}>{politician.office}</Text>
+        </View>
+      </View>
+      <Pressable onPress={onSave} style={styles.primaryButton}>
+        <Text style={styles.primaryButtonText}>{saved ? 'Saved' : 'Save politician'}</Text>
+      </Pressable>
+    </Card>
+  );
+}
+
+function ProfileScreen({ politician }: { politician: Politician }) {
   return (
     <View style={styles.stack}>
       <Card>
-        <View style={styles.profileTop}>
-          <Avatar person={politician} large />
-          <View style={styles.flex}>
-            <Text style={styles.eyebrow}>{politician.party} · {politician.state}</Text>
-            <Text style={styles.title}>{politician.firstName} {politician.lastName}</Text>
-            <Text style={styles.muted}>{politician.office}</Text>
-          </View>
-        </View>
+        <Text style={styles.rowTitle}>Biography</Text>
         <Text style={styles.body}>{politician.biography}</Text>
-        <Pressable onPress={onSave} style={styles.primaryButton}>
-          <Text style={styles.primaryButtonText}>{saved ? 'Saved' : 'Save politician'}</Text>
-        </Pressable>
       </Card>
 
       <View style={styles.metricRow}>
@@ -167,7 +416,51 @@ function ProfileScreen({ politician, saved, onSave }: { politician: Politician; 
   );
 }
 
-function VotingScreen() {
+function BillsScreen({ onOpenBill }: { onOpenBill: (bill: Bill) => void }) {
+  const supported = votes.filter((vote) => vote.vote === 'YEA');
+  const opposed = votes.filter((vote) => vote.vote === 'NAY');
+  return (
+    <View style={styles.stack}>
+      <Text style={styles.label}>Supported</Text>
+      {supported.map((vote) => (
+        <Pressable key={vote.id} onPress={() => onOpenBill(bills.find((bill) => bill.id === vote.billId) ?? bills[0])}>
+        <Card>
+          <Text style={styles.rowTitle}>{vote.billNumber}</Text>
+          <Text style={styles.body}>{vote.title}</Text>
+        </Card>
+        </Pressable>
+      ))}
+      <Text style={styles.label}>Opposed</Text>
+      {opposed.map((vote) => (
+        <Pressable key={vote.id} onPress={() => onOpenBill(bills.find((bill) => bill.id === vote.billId) ?? bills[0])}>
+        <Card>
+          <Text style={styles.rowTitle}>{vote.billNumber}</Text>
+          <Text style={styles.body}>{vote.title}</Text>
+        </Card>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+function ArticlesScreen() {
+  return (
+    <View style={styles.stack}>
+      {articles.map((article) => (
+        <Card key={article.id}>
+          <View style={styles.split}>
+            <Text style={styles.rowTitle}>{article.headline}</Text>
+            <Badge label={article.tone} tone={article.tone === 'Controversy' ? 'warn' : 'neutral'} />
+          </View>
+          <Text style={styles.muted}>{article.source} · {article.date}</Text>
+          <Text style={styles.body}>{article.summary}</Text>
+        </Card>
+      ))}
+    </View>
+  );
+}
+
+function VotingScreen({ onOpenBill }: { onOpenBill: (bill: Bill) => void }) {
   return (
     <View style={styles.stack}>
       <View style={styles.metricRow}>
@@ -176,7 +469,8 @@ function VotingScreen() {
         <Metric label="Abstained" value="0" />
       </View>
       {votes.map((vote) => (
-        <Card key={vote.id}>
+        <Pressable key={vote.id} onPress={() => onOpenBill(bills.find((bill) => bill.id === vote.billId) ?? bills[0])}>
+        <Card>
           <View style={styles.split}>
             <Text style={styles.rowTitle}>{vote.billNumber}</Text>
             <Badge label={vote.vote} tone={vote.vote === 'YEA' ? 'good' : 'warn'} />
@@ -184,6 +478,7 @@ function VotingScreen() {
           <Text style={styles.body}>{vote.title}</Text>
           <Text style={styles.muted}>{vote.date}</Text>
         </Card>
+        </Pressable>
       ))}
     </View>
   );
@@ -336,11 +631,68 @@ function Badge({ label, tone }: { label: string; tone: 'good' | 'warn' | 'neutra
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#13201b',
+    backgroundColor: '#e8eee9',
+  },
+  webStage: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    backgroundColor: '#e8eee9',
+  },
+  deviceFrame: {
+    position: 'relative',
+    width: '100%',
+    maxWidth: 430,
+    height: '94%',
+    maxHeight: 932,
+    minHeight: 680,
+    paddingTop: 18,
+    paddingRight: 10,
+    paddingBottom: 18,
+    paddingLeft: 10,
+    borderWidth: 10,
+    borderColor: '#07100d',
+    borderRadius: 46,
+    backgroundColor: '#07100d',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.28,
+    shadowRadius: 30,
+  },
+  deviceNotch: {
+    position: 'absolute',
+    top: 10,
+    left: '50%',
+    width: 128,
+    height: 28,
+    marginLeft: -64,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    backgroundColor: '#07100d',
+    zIndex: 10,
+  },
+  deviceHomeIndicator: {
+    position: 'absolute',
+    bottom: 8,
+    left: '50%',
+    width: 118,
+    height: 4,
+    marginLeft: -59,
+    borderRadius: 2,
+    backgroundColor: '#d9e1dc',
+    opacity: 0.85,
   },
   shell: {
     flex: 1,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     backgroundColor: '#f4f7f5',
+    overflow: 'hidden',
+  },
+  webShell: {
+    borderRadius: 34,
   },
   header: {
     flexDirection: 'row',
@@ -395,6 +747,46 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 36,
   },
+  searchHero: {
+    backgroundColor: '#e8f4ed',
+  },
+  heroTitle: {
+    color: '#13201b',
+    fontSize: 25,
+    fontWeight: '900',
+  },
+  profileTabs: {
+    maxHeight: 52,
+  },
+  profileTabButton: {
+    height: 38,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#d9e1dc',
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+  },
+  profileTabButtonActive: {
+    borderColor: '#78aa8b',
+    backgroundColor: '#13201b',
+  },
+  profileTabText: {
+    color: '#34463d',
+    fontWeight: '800',
+  },
+  profileTabTextActive: {
+    color: '#f8fbf8',
+  },
+  textButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+  },
+  textButtonLabel: {
+    color: '#187048',
+    fontWeight: '800',
+  },
   stack: {
     gap: 12,
   },
@@ -441,6 +833,19 @@ const styles = StyleSheet.create({
   avatarText: {
     color: '#102017',
     fontSize: 16,
+    fontWeight: '900',
+  },
+  billIcon: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#13201b',
+  },
+  billIconText: {
+    color: '#c7ead4',
+    fontSize: 12,
     fontWeight: '900',
   },
   flex: {

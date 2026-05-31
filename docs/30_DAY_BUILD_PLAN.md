@@ -4,56 +4,56 @@ Goal: ship a credible web and mobile MVP for political accountability with relia
 
 ## Week 1: Foundation And Data Model
 
-### Day 1
-- Backend: finalize schema gaps for offices, elections, public statements, source citations, fact checks, tags, and audit logs.
-- Frontend: confirm dashboard navigation and data contract needs.
-- Mobile: confirm MVP screen list and app-store bundle identifiers.
-- Data ingestion: define canonical CSV/JSON templates.
-- Testing: add schema migration validation to CI.
-- Security: define roles for public reader, analyst, admin, and data-import operator.
-- Deployment: document local dev boot sequence.
+### Day 1 - Complete
+- Backend: finalized schema gaps for offices, elections, public statements, source citations, fact checks, tags, audit logs, and import batches in `docs/DAY_1_FOUNDATION.md`.
+- Frontend: confirmed dashboard navigation and data contract needs.
+- Mobile: confirmed MVP screen list and app-store bundle identifiers in `mobile/README.md`, `mobile/app.json`, and `mobile/eas.json`.
+- Data ingestion: defined canonical CSV/JSON templates in `data/templates/`.
+- Testing: added Liquibase changelog validation to CI.
+- Security: defined roles for public reader, analyst, admin, and data-import operator.
+- Deployment: documented local dev boot sequence.
 
-### Day 2
-- Backend: add Liquibase migrations for `offices`, `elections`, and `politician_offices`.
-- Frontend: add API DTO expectations for office and election history.
-- Mobile: add API client shell.
-- Data ingestion: add validation rules for politician identity matching.
-- Testing: add repository integration tests for office/election tables.
-- Security: require source provenance for all ingested records.
-- Deployment: add environment variable inventory.
+### Day 2 - Complete
+- Backend: added Liquibase migrations for `offices`, `elections`, `politician_offices`, and `election_candidates`.
+- Frontend: confirmed the product flow should be search-first, then politician-specific tabs for overview, votes, bills, articles, issues, timeline, compare, and citations.
+- Mobile: added an API client contract shell and reshaped the MVP navigation around search/saved entry points plus profile tabs.
+- Data ingestion: documented politician identity matching rules in `docs/IDENTITY_MATCHING.md`.
+- Testing: added repository integration coverage for office/election same-seat candidate relationships.
+- Security: documented source provenance as a publishing requirement.
+- Deployment: added environment variable inventory in `docs/ENVIRONMENT.md`.
 
-### Day 3
-- Backend: add `source_registry` and `source_citations` tables.
-- Frontend: make citations reusable across profile, votes, bills, statements, and controversies.
-- Mobile: wire source citations screen to future endpoint shape.
-- Data ingestion: normalize source names and URLs.
-- Testing: add citation validation tests.
-- Security: add source quality enum and admin override audit requirement.
-- Deployment: add staging database migration checklist.
+### Day 3 - Complete
+- Backend: added `source_registry` and `source_citations` tables.
+- Frontend: kept citations reusable across profile, votes, bills, statements, controversies, and bill detail views.
+- Mobile: source citations screen already matches the future endpoint shape.
+- Data ingestion: API connector docs now require official source names, URLs, and source quality metadata.
+- Testing: Liquibase validation covers the new citation schema.
+- Security: source quality enum and source-provenance requirement are now represented in schema.
+- Deployment: local Kafka and API-ingestion runbook documented in `docs/API_INGESTION.md`.
 
-### Day 4
-- Backend: add `public_statements`, `claims`, and `fact_checks` tables.
-- Frontend: split public statements from generic content items.
-- Mobile: add issue stance API model.
-- Data ingestion: define statement import template.
-- Testing: add parsing tests for quotes, claims, and statement dates.
-- Security: define prompt-injection sanitation requirements for scraped text.
-- Deployment: add backup/restore notes for Postgres.
+### Day 4 - Complete
+- Backend: added `public_statements`, `claims`, `fact_checks`, `tags`, and `taggings` tables.
+- Frontend: statements remain separated from generic content in the dashboard.
+- Mobile: issue stance model exists and is ready for backend wiring.
+- Data ingestion: statement/claim/fact-check records have dedicated schema targets.
+- Testing: Liquibase validation covers statement, claim, fact-check, and tag schema.
+- Security: official documents and raw ingestion events are kept separate from final normalized claims.
+- Deployment: Kafka raw-content logger added for local verification before normalized persistence.
 
-### Day 5
-- Backend: add `audit_log` append-only table and repository.
+### Day 5 - Partially Complete
+- Backend: bill actions, source citations, import batches, and row-level import results are in schema and API flow; append-only `audit_log` remains next.
 - Frontend: add admin-facing audit event type definitions.
 - Mobile: keep audit internal; no voter-facing exposure yet.
-- Data ingestion: log import batch metadata.
-- Testing: add audit write tests.
+- Data ingestion: official API normalization logs import batch metadata and row outcomes.
+- Testing: add audit write tests and DB-backed import batch integration tests.
 - Security: define audit retention and tamper-resistance rules.
 - Deployment: add log retention defaults.
 
-### Day 6
-- Backend: add `import_batches` and `import_row_results`.
+### Day 6 - Partially Complete
+- Backend: `import_batches` and `import_row_results` are available for ingestion auditability.
 - Frontend: add import status wireframe for later admin UI.
 - Mobile: no mobile work unless week slips.
-- Data ingestion: report skipped rows with reasons.
+- Data ingestion: normalizer reports skipped rows with reasons for unsupported or failed source events.
 - Testing: add integration test for one full import batch.
 - Security: hash source files and store checksum.
 - Deployment: document import rollback procedure.
@@ -89,8 +89,8 @@ Goal: ship a credible web and mobile MVP for political accountability with relia
 
 ### Day 10
 - Backend: add bills search/detail endpoints with sponsor/cosponsor support.
-- Frontend: wire bills supported/opposed views.
-- Mobile: wire compare and bills-related stances.
+- Frontend: wire bills supported/opposed views and bill detail pages.
+- Mobile: wire bill search, clickable politician vote/bill cards, and bill detail pages with votes for/against.
 - Data ingestion: import bills and sponsors.
 - Testing: bill search tests.
 - Security: rate-limit search endpoint design.
