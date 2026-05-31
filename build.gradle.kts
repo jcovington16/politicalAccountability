@@ -1,7 +1,7 @@
 plugins {
     kotlin("jvm") version "1.9.24"
     id("com.github.johnrengelman.shadow") version "8.1.1"
-    id("org.owasp.dependencycheck") version "8.4.0"
+    id("org.owasp.dependencycheck") version "12.2.2"
     id("jacoco")
 }
 
@@ -132,6 +132,17 @@ tasks.register<Test>("integrationTest") {
 dependencyCheck {
     failBuildOnCVSS = 7.0f
     suppressionFile = "dependency-check-suppressions.xml"
+    formats = listOf("HTML", "JSON")
+
+    // Keep the vulnerability database in a stable cache location so CI can
+    // restore it between runs. This avoids hammering NVD on every workflow.
+    data.directory = "${System.getProperty("user.home")}/.gradle/dependency-check-data"
+
+    // NVD strongly prefers API-keyed access. In CI, set repository secret
+    // NVD_API_KEY; local runs continue to work without committing anything.
+    System.getenv("NVD_API_KEY")?.takeIf { it.isNotBlank() }?.let { key ->
+        nvd.apiKey = key
+    }
 }
 
 // Task to generate test coverage report

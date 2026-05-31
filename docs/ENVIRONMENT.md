@@ -21,5 +21,6 @@ Local development uses `.env` for scripts and service configuration. Do not comm
 | `INGEST_INPUT_DIR` | Local ingestion | Optional | `data/ingestion` | Directory containing CSV/JSON imports. |
 | `LIQUIBASE_IMAGE` | Liquibase scripts | Optional | `liquibase:4.33` | Docker fallback image. |
 | `LIQUIBASE_DOCKER_NETWORK` | Liquibase scripts | CI | unset | Use `host` in GitHub Actions service-container validation. |
+| `NVD_API_KEY` | CI security scan | Recommended | unset | Optional GitHub secret for OWASP Dependency-Check. Reduces NVD throttling and 403 failures. |
 
 Production should split migration credentials from runtime credentials. Liquibase should use a migration account; API and ingestion services should use least-privilege runtime accounts.

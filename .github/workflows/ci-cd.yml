@@ -131,20 +131,24 @@ jobs:
           - 9200:9200
 
       kafka:
-        image: bitnami/kafka:latest
+        image: confluentinc/cp-kafka:7.6.1
         env:
           KAFKA_BROKER_ID: 1
-          KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
-          KAFKA_CFG_LISTENERS: PLAINTEXT://:9092
-          KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-          ALLOW_PLAINTEXT_LISTENER: yes
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+          KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
         ports:
           - 9092:9092
 
       zookeeper:
-        image: bitnami/zookeeper:latest
+        image: confluentinc/cp-zookeeper:7.6.1
         env:
-          ALLOW_ANONYMOUS_LOGIN: yes
+          ZOOKEEPER_CLIENT_PORT: 2181
+          ZOOKEEPER_TICK_TIME: 2000
         ports:
           - 2181:2181
 
@@ -212,8 +216,18 @@ jobs:
         java-version: ${{ env.JAVA_VERSION }}
         distribution: 'temurin'
 
+    - name: Cache OWASP Dependency-Check data
+      uses: actions/cache@v4
+      with:
+        path: ~/.gradle/dependency-check-data
+        key: ${{ runner.os }}-dependency-check-${{ github.run_id }}
+        restore-keys: |
+          ${{ runner.os }}-dependency-check-
+
     - name: Run dependency check
-      run: ./gradlew dependencyCheckAnalyze
+      run: ./gradlew dependencyCheckAnalyze --info
+      env:
+        NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
 
     - name: Upload security scan results
       uses: actions/upload-artifact@v4
@@ -222,6 +236,7 @@ jobs:
         name: security-scan-results
         path: |
           **/build/reports/dependency-check-report.html
+          **/build/reports/dependency-check-report.json
 
   # Build Docker Image Job
   build-docker:
