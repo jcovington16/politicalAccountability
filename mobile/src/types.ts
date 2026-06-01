@@ -5,31 +5,34 @@ export type Politician = {
   party: string;
   state: string;
   office: string;
-  biography: string;
+  biography?: string;
+  profileImageUrl?: string;
   startDate: string;
+  endDate?: string;
 };
 
 export type VoteRecord = {
   id: string;
   billId: string;
   billNumber: string;
-  title: string;
-  vote: 'YEA' | 'NAY' | 'ABSTAIN';
-  date: string;
+  billTitle: string;
+  voteType: 'YEA' | 'NAY' | 'ABSTAIN';
+  voteDate: string;
 };
 
 export type Bill = {
   id: string;
   billNumber: string;
   title: string;
-  summary: string;
+  description?: string;
+  introducedBy?: string;
   status: 'Pending' | 'Passed' | 'Failed' | 'Vetoed';
   introducedDate: string;
   lastActionDate?: string;
-  sponsor: string;
-  chamber: string;
-  jurisdiction: string;
-  sourceUrl: string;
+  sponsor?: string;
+  chamber?: string;
+  jurisdiction?: string;
+  billUrl?: string;
 };
 
 export type BillVote = {
@@ -38,8 +41,8 @@ export type BillVote = {
   politicianName: string;
   party: string;
   state: string;
-  vote: 'YEA' | 'NAY' | 'ABSTAIN';
-  date: string;
+  voteType: 'YEA' | 'NAY' | 'ABSTAIN';
+  voteDate: string;
 };
 
 export type IssueStance = {

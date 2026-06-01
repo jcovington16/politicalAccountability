@@ -23,6 +23,14 @@ class PoliticianResourceTest {
     }
 
     @Test
+    void getPoliticianProfileRejectsInvalidUuid() {
+        Response response = resource.getPoliticianProfile("not-a-uuid");
+
+        assertThat(response.getStatus()).isEqualTo(400);
+        assertThat(response.getEntity()).isEqualTo("Invalid UUID format");
+    }
+
+    @Test
     void searchByNameRequiresNameQuery() {
         Response response = resource.searchByName(" ");
 

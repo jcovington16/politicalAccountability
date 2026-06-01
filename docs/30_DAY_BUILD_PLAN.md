@@ -40,32 +40,32 @@ Goal: ship a credible web and mobile MVP for political accountability with relia
 - Security: official documents and raw ingestion events are kept separate from final normalized claims.
 - Deployment: Kafka raw-content logger added for local verification before normalized persistence.
 
-### Day 5 - Partially Complete
-- Backend: bill actions, source citations, import batches, and row-level import results are in schema and API flow; append-only `audit_log` remains next.
-- Frontend: add admin-facing audit event type definitions.
+### Day 5 - Complete
+- Backend: bill actions, source citations, import batches, row-level import results, and append-only `audit_log` are in schema/API flow.
+- Frontend: internal Security view now reflects audit-log progress and remaining auth requirement.
 - Mobile: keep audit internal; no voter-facing exposure yet.
 - Data ingestion: official API normalization logs import batch metadata and row outcomes.
-- Testing: add audit write tests and DB-backed import batch integration tests.
-- Security: define audit retention and tamper-resistance rules.
-- Deployment: add log retention defaults.
+- Testing: added API validation tests and DB-backed import/audit integration coverage.
+- Security: audit records are append-only at the database layer; auth remains required before public/shared admin exposure.
+- Deployment: import and audit endpoints documented in `docs/API_INGESTION.md`.
 
-### Day 6 - Partially Complete
-- Backend: `import_batches` and `import_row_results` are available for ingestion auditability.
-- Frontend: add import status wireframe for later admin UI.
+### Day 6 - Complete
+- Backend: `import_batches` and `import_row_results` are available through import visibility endpoints.
+- Frontend: import status remains internal/admin scope; public voter app stays focused on search/profile/bills.
 - Mobile: no mobile work unless week slips.
 - Data ingestion: normalizer reports skipped rows with reasons for unsupported or failed source events.
-- Testing: add integration test for one full import batch.
-- Security: hash source files and store checksum.
-- Deployment: document import rollback procedure.
+- Testing: integration test covers one full import batch plus row lookup.
+- Security: `source_checksum` column added for reproducible imports.
+- Deployment: import visibility and audit endpoints documented.
 
-### Day 7
-- Backend: refactor repositories around the finalized schema.
-- Frontend: align dashboard mocks with final API contracts.
-- Mobile: align mobile mocks with final API contracts.
-- Data ingestion: dry-run sample data through validators.
-- Testing: run full unit and integration suite.
-- Security: threat-model review.
-- Deployment: tag Week 1 baseline.
+### Day 7 - Complete
+- Backend: refactored politician persistence to use a schema-aligned upsert path and verified live search remains backed by PostgreSQL.
+- Frontend: aligned dashboard search behavior with the API contract so politician and bill search query the backend automatically.
+- Mobile: aligned mobile API/mocks with backend field names and search endpoints.
+- Data ingestion: added `make ingest-dry-run` to validate sample CSV/JSON files before writing to PostgreSQL.
+- Testing: ran frontend/mobile type checks, sample dry-run validation, and backend test/build checks.
+- Security: completed Week 1 threat-model review in `docs/THREAT_MODEL.md`.
+- Deployment: Week 1 baseline is ready to tag after the current working tree is committed.
 
 ## Week 2: API And Ingestion
 

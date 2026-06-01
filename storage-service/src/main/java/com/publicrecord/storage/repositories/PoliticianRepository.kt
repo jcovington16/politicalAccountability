@@ -18,49 +18,34 @@ class PoliticianRepository(private val dbConfig: DatabaseConfig) {
      */
     fun save(politician: Politician): Boolean {
         return try {
-            val connection = dbConfig.getConnection()
-            connection.use { conn ->
-                // Check if already exists
-                val checkSql = "SELECT id FROM politicians WHERE id = ?"
-                val existing = conn.prepareStatement(checkSql).use { stmt ->
-                    stmt.setObject(1, politician.id)
-                    stmt.executeQuery().next()
-                }
-
-                val sql = if (existing) {
-                    // Update
-                    """
-                        UPDATE politicians SET 
-                            first_name = ?, last_name = ?, party = ?, state = ?, 
-                            office = ?, biography = ?, profile_image_url = ?, 
-                            start_date = ?, end_date = ?, updated_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """.trimIndent()
-                } else {
-                    // Insert
-                    """
-                        INSERT INTO politicians 
-                        (id, first_name, last_name, party, state, office, biography, 
-                         profile_image_url, start_date, end_date)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """.trimIndent()
-                }
-
+            dbConfig.getConnection().use { conn ->
+                val sql = """
+                    INSERT INTO politicians
+                    (id, first_name, last_name, party, state, office, biography, profile_image_url, start_date, end_date)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (id) DO UPDATE SET
+                        first_name = EXCLUDED.first_name,
+                        last_name = EXCLUDED.last_name,
+                        party = EXCLUDED.party,
+                        state = EXCLUDED.state,
+                        office = EXCLUDED.office,
+                        biography = COALESCE(EXCLUDED.biography, politicians.biography),
+                        profile_image_url = COALESCE(EXCLUDED.profile_image_url, politicians.profile_image_url),
+                        start_date = COALESCE(EXCLUDED.start_date, politicians.start_date),
+                        end_date = EXCLUDED.end_date,
+                        updated_at = CURRENT_TIMESTAMP
+                """.trimIndent()
                 conn.prepareStatement(sql).use { stmt ->
-                    stmt.setString(1, politician.firstName)
-                    stmt.setString(2, politician.lastName)
-                    stmt.setString(3, politician.party)
-                    stmt.setString(4, politician.state)
-                    stmt.setString(5, politician.office)
-                    stmt.setString(6, politician.biography)
-                    stmt.setString(7, politician.profileImageUrl)
-                    stmt.setObject(8, politician.startDate)
-                    stmt.setObject(9, politician.endDate)
-                    if (existing) {
-                        stmt.setObject(10, politician.id)
-                    } else {
-                        stmt.setObject(10, politician.id)
-                    }
+                    stmt.setObject(1, politician.id)
+                    stmt.setString(2, politician.firstName)
+                    stmt.setString(3, politician.lastName)
+                    stmt.setString(4, politician.party)
+                    stmt.setString(5, politician.state)
+                    stmt.setString(6, politician.office)
+                    stmt.setString(7, politician.biography)
+                    stmt.setString(8, politician.profileImageUrl)
+                    stmt.setObject(9, politician.startDate)
+                    stmt.setObject(10, politician.endDate)
                     stmt.executeUpdate()
                     logger.info("✅ Saved politician: ${politician.firstName} ${politician.lastName}")
                 }
@@ -105,7 +90,13 @@ class PoliticianRepository(private val dbConfig: DatabaseConfig) {
             connection.use { conn ->
                 val sql = """
                     SELECT * FROM politicians 
-                    WHERE first_name ILIKE ? OR last_name ILIKE ?
+                    WHERE 
+                        concat_ws(' ', first_name, last_name) ILIKE ?
+                        OR first_name ILIKE ?
+                        OR last_name ILIKE ?
+                        OR office ILIKE ?
+                        OR state ILIKE ?
+                        OR party ILIKE ?
                     ORDER BY first_name, last_name
                     LIMIT ?
                 """.trimIndent()
@@ -114,7 +105,11 @@ class PoliticianRepository(private val dbConfig: DatabaseConfig) {
                     val searchTerm = "%$nameQuery%"
                     stmt.setString(1, searchTerm)
                     stmt.setString(2, searchTerm)
-                    stmt.setInt(3, limit)
+                    stmt.setString(3, searchTerm)
+                    stmt.setString(4, searchTerm)
+                    stmt.setString(5, searchTerm)
+                    stmt.setString(6, searchTerm)
+                    stmt.setInt(7, limit)
                     
                     val rs = stmt.executeQuery()
                     val results = mutableListOf<Politician>()

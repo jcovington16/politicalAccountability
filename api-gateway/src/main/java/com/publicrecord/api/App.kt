@@ -7,9 +7,13 @@ import com.publicrecord.api.resources.TimelineResource
 import com.publicrecord.api.resources.ContentItemResource
 import com.publicrecord.api.resources.NewsResource
 import com.publicrecord.api.resources.BillResource
+import com.publicrecord.api.resources.AuditLogResource
+import com.publicrecord.api.resources.ImportResource
 import com.publicrecord.api.resources.TrustResource
 import com.publicrecord.api.resources.VotingRecordResource
 import com.publicrecord.api.services.BillService
+import com.publicrecord.api.services.CongressBillBackfillService
+import com.publicrecord.api.services.PoliticianProfileService
 import com.publicrecord.api.services.VotingRecordService
 import com.publicrecord.storage.services.DatabaseService
 import com.publicrecord.storage.services.ElasticSearchService
@@ -18,7 +22,9 @@ import com.publicrecord.storage.services.KafkaService
 import com.publicrecord.storage.services.ProcessedContentSinkService
 import com.publicrecord.storage.config.DatabaseConfig
 import com.publicrecord.storage.repositories.BillRepository
+import com.publicrecord.storage.repositories.AuditLogRepository
 import com.publicrecord.storage.repositories.ContentItemRepository
+import com.publicrecord.storage.repositories.ImportRepository
 import com.publicrecord.storage.repositories.PoliticianRepository
 import com.publicrecord.storage.repositories.SourceCitationRepository
 import com.publicrecord.storage.repositories.VotingRecordRepository
@@ -64,9 +70,22 @@ class App : Application<AppConfig>() {
         val politicianRepository = PoliticianRepository(databaseConfig)
         val contentItemRepository = ContentItemRepository(databaseConfig)
         val billRepository = BillRepository(databaseConfig)
+        val importRepository = ImportRepository(databaseConfig)
+        val auditLogRepository = AuditLogRepository(databaseConfig)
         val sourceCitationRepository = SourceCitationRepository(databaseConfig)
         val votingRecordRepository = VotingRecordRepository(databaseConfig)
-        val billService = BillService(billRepository, sourceCitationRepository)
+        val billService = BillService(
+            billRepository,
+            sourceCitationRepository,
+            CongressBillBackfillService(billRepository)
+        )
+        val politicianProfileService = PoliticianProfileService(
+            politicianRepository,
+            votingRecordRepository,
+            billRepository,
+            contentItemRepository,
+            sourceCitationRepository
+        )
         val votingRecordService = VotingRecordService(votingRecordRepository)
         val processedContentSinkService = ProcessedContentSinkService(
             kafkaBootstrapServers = config.kafkaBootstrapServers,
@@ -81,13 +100,16 @@ class App : Application<AppConfig>() {
         env.lifecycle().manage(ProcessedContentSinkManagedService(processedContentSinkService))
 
         configureCors(config, env)
+        env.jersey().register(AdminAuthorizationFilter(config.adminApiToken))
 
         // Register API resources
-        env.jersey().register(PoliticianResource(politicianRepository))
+        env.jersey().register(PoliticianResource(politicianRepository, politicianProfileService))
         env.jersey().register(TimelineResource(contentItemRepository))
         env.jersey().register(ContentItemResource(contentItemRepository))
         env.jersey().register(NewsResource())
         env.jersey().register(BillResource(billService))
+        env.jersey().register(ImportResource(importRepository))
+        env.jersey().register(AuditLogResource(auditLogRepository))
         env.jersey().register(VotingRecordResource(votingRecordService))
         env.jersey().register(TrustResource())
 

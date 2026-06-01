@@ -49,6 +49,13 @@ tasks.register<JavaExec>("runCongressGovBills") {
     mainClass.set("com.publicrecord.ingestion.CongressGovIngestionMainKt")
 }
 
+tasks.register<JavaExec>("runCongressGovMembers") {
+    group = "application"
+    description = "Fetch Congress.gov member profiles into PostgreSQL"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.publicrecord.ingestion.CongressMemberIngestionMainKt")
+}
+
 tasks.register<JavaExec>("runGovInfoPackages") {
     group = "application"
     description = "Fetch recent GovInfo package summaries and optionally publish them to Kafka"
@@ -68,4 +75,11 @@ tasks.register<JavaExec>("runOfficialDataNormalization") {
     description = "Fetch official source data and normalize it into PostgreSQL"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.publicrecord.ingestion.OfficialDataNormalizeMainKt")
+}
+
+tasks.register<JavaExec>("runStateCivicIngestion") {
+    group = "application"
+    description = "Fetch Open States and Google Civic records into PostgreSQL"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.publicrecord.ingestion.StateCivicIngestionMainKt")
 }

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   AlertTriangle,
@@ -58,9 +58,45 @@ function App() {
   const [billResults, setBillResults] = useState<Bill[]>(sampleBills);
   const [apiState, setApiState] = useState('Using sample dashboard data');
   const [billApiState, setBillApiState] = useState('Using sample dashboard bill data');
+  const latestPoliticianSearch = useRef(0);
+  const latestBillSearch = useRef(0);
 
-  async function runSearch() {
+  useEffect(() => {
     const trimmed = query.trim();
+
+    if (!trimmed) {
+      setResults(samplePoliticians);
+      setApiState('Using sample dashboard data');
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void runSearch(trimmed);
+    }, 350);
+
+    return () => window.clearTimeout(timeout);
+  }, [query]);
+
+  useEffect(() => {
+    const trimmed = billQuery.trim();
+
+    if (!trimmed) {
+      setBillResults(sampleBills);
+      setBillApiState('Using sample dashboard bill data');
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void runBillSearch(trimmed);
+    }, 350);
+
+    return () => window.clearTimeout(timeout);
+  }, [billQuery]);
+
+  async function runSearch(searchTerm = query.trim()) {
+    const searchId = latestPoliticianSearch.current + 1;
+    latestPoliticianSearch.current = searchId;
+    const trimmed = searchTerm.trim();
     if (!trimmed) {
       setResults(samplePoliticians);
       setApiState('Using sample dashboard data');
@@ -68,24 +104,26 @@ function App() {
       return;
     }
 
+    setApiState('Searching live politician data...');
+
     try {
-      const found = await searchPoliticians(trimmed);
+      const found = await searchPoliticians(searchTerm);
+      if (searchId !== latestPoliticianSearch.current) return;
       if (found.length > 0) {
         setResults(found);
         setSelected(found[0]);
         setApiState('Connected to API');
         setView('search');
       } else {
-        setResults([]);
-        setApiState('No API matches found');
+        const local = filterSamplePoliticians(trimmed);
+        setResults(local);
+        if (local[0]) setSelected(local[0]);
+        setApiState(local.length > 0 ? 'No API matches, showing sample data' : 'No matches found');
         setView('search');
       }
     } catch {
-      const local = samplePoliticians.filter((p) =>
-        `${p.firstName} ${p.lastName} ${p.party} ${p.state} ${p.office}`
-          .toLowerCase()
-          .includes(trimmed.toLowerCase()),
-      );
+      if (searchId !== latestPoliticianSearch.current) return;
+      const local = filterSamplePoliticians(searchTerm);
       setResults(local);
       if (local[0]) setSelected(local[0]);
       setApiState('API unavailable, filtered sample data');
@@ -111,8 +149,10 @@ function App() {
     setSavedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   }
 
-  async function runBillSearch() {
-    const trimmed = billQuery.trim();
+  async function runBillSearch(searchTerm = billQuery.trim()) {
+    const searchId = latestBillSearch.current + 1;
+    latestBillSearch.current = searchId;
+    const trimmed = searchTerm.trim();
     setBillQuery(trimmed);
     setView('bills');
 
@@ -122,12 +162,23 @@ function App() {
       return;
     }
 
+    setBillApiState('Searching live bill data...');
+
     try {
       const found = await searchBillsApi(trimmed);
-      setBillResults(found);
-      setBillApiState(found.length > 0 ? 'Connected to API' : 'No API matches found');
-      if (found[0]) setSelectedBill(found[0]);
+      if (searchId !== latestBillSearch.current) return;
+      if (found.length > 0) {
+        setBillResults(found);
+        setBillApiState('Connected to API');
+        setSelectedBill(found[0]);
+      } else {
+        const local = filterSampleBills(trimmed);
+        setBillResults(local);
+        setBillApiState(local.length > 0 ? 'No API matches, showing sample bill data' : 'No bill matches found');
+        if (local[0]) setSelectedBill(local[0]);
+      }
     } catch {
+      if (searchId !== latestBillSearch.current) return;
       const local = filterSampleBills(trimmed);
       setBillResults(local);
       setBillApiState('API unavailable, filtered sample bill data');
@@ -160,14 +211,18 @@ function App() {
               <input
                 id="politician-search"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setQuery(value);
+                  setApiState(value.trim() ? 'Searching live politician data...' : 'Using sample dashboard data');
+                }}
               onFocus={() => setView('search')}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') runSearch();
               }}
                 placeholder="Name, state, office"
               />
-              <button type="button" onClick={runSearch} title="Search politicians">
+              <button type="button" onClick={() => void runSearch()} title="Search politicians">
                 <FileSearch size={18} aria-hidden="true" />
               </button>
             </div>
@@ -186,8 +241,7 @@ function App() {
                 onChange={(event) => {
                   const value = event.target.value;
                   setBillQuery(value);
-                  setBillResults(filterSampleBills(value));
-                  setBillApiState(value.trim() ? 'Filtering sample bill data' : 'Using sample dashboard bill data');
+                  setBillApiState(value.trim() ? 'Searching live bill data...' : 'Using sample dashboard bill data');
                 }}
                 onFocus={() => setView('bills')}
                 onKeyDown={(event) => {
@@ -195,7 +249,7 @@ function App() {
                 }}
                 placeholder="Bill number, title, sponsor"
               />
-              <button type="button" onClick={runBillSearch} title="Search bills">
+              <button type="button" onClick={() => void runBillSearch()} title="Search bills">
                 <FileSearch size={18} aria-hidden="true" />
               </button>
             </div>
@@ -270,6 +324,16 @@ function App() {
         )}
       </main>
     </div>
+  );
+}
+
+function filterSamplePoliticians(query: string): Politician[] {
+  const value = query.trim().toLowerCase();
+  if (!value) return samplePoliticians;
+  return samplePoliticians.filter((politician) =>
+    `${politician.firstName} ${politician.lastName} ${politician.party} ${politician.state} ${politician.office}`
+      .toLowerCase()
+      .includes(value),
   );
 }
 

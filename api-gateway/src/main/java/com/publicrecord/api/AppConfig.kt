@@ -42,6 +42,9 @@ class AppConfig : Configuration() {
     @JsonProperty("minioBucket")
     var minioBucket: String = envOrDefault("MINIO_BUCKET", "political-media")
 
+    @JsonProperty("adminApiToken")
+    var adminApiToken: String = envOrDefault("ADMIN_API_TOKEN", localDevDefault("local-admin-token"))
+
     @JsonProperty("cors")
     var cors: CorsConfig = CorsConfig()  // New nested CORS configuration
 
@@ -61,6 +64,9 @@ class AppConfig : Configuration() {
         }
         require(cors.allowedOrigins != "*") {
             "Wildcard CORS origins are not allowed in production"
+        }
+        require(adminApiToken.isNotBlank()) {
+            "ADMIN_API_TOKEN or adminApiToken must be set in production"
         }
     }
 

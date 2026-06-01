@@ -1,6 +1,6 @@
 # Political Accountability App - Development Makefile
 
-.PHONY: help build test clean run deploy health-check docker-build docker-run db-status db-migrate db-validate db-history db-rollback db-new db-tag ingest-local ingest-congress-bills ingest-govinfo-packages kafka-raw-log dashboard-install dashboard-dev dashboard-build mobile-install mobile-start mobile-typecheck
+.PHONY: help build test clean run deploy health-check docker-build docker-run db-status db-migrate db-validate db-history db-rollback db-new db-tag ingest-local ingest-dry-run ingest-congress-bills ingest-congress-members ingest-govinfo-packages ingest-state-civic kafka-raw-log dashboard-install dashboard-dev dashboard-build mobile-install mobile-start mobile-typecheck
 
 # Default target
 help:
@@ -19,8 +19,11 @@ help:
 	@echo "  dev            - Start development environment"
 	@echo "  stop           - Stop development environment"
 	@echo "  ingest-local dir=x - Import local CSV/JSON files"
+	@echo "  ingest-dry-run - Validate sample CSV/JSON files without writing to the database"
 	@echo "  ingest-congress-bills - Fetch recent Congress.gov bill events"
+	@echo "  ingest-congress-members - Fetch Congress.gov member profiles"
 	@echo "  ingest-govinfo-packages - Fetch recent GovInfo official document events"
+	@echo "  ingest-state-civic - Fetch Open States and Google Civic records"
 	@echo "  kafka-raw-log - Print raw-content Kafka events"
 	@echo "  dashboard-dev  - Run React dashboard"
 	@echo "  dashboard-build - Build React dashboard"
@@ -77,7 +80,7 @@ clean:
 # Development targets
 run:
 	@echo "🚀 Starting application..."
-	./gradlew :api-gateway:run
+	@set -a; [ ! -f .env ] || . ./.env; set +a; ./gradlew :api-gateway:runApiGateway
 
 dev:
 	@echo "🏗️ Starting development environment..."
@@ -188,8 +191,14 @@ ingest-local:
 	@test -n "$(dir)" || (echo "Usage: make ingest-local dir=data/ingestion" && exit 1)
 	./gradlew :ingestion-service:runLocalFileIngestion -PinputDir="$(dir)"
 
+ingest-dry-run:
+	node scripts/validate-sample-data.mjs data/templates
+
 ingest-congress-bills:
 	@set -a; [ ! -f .env ] || . ./.env; set +a; ./gradlew :ingestion-service:runCongressGovBills
+
+ingest-congress-members:
+	@set -a; [ ! -f .env ] || . ./.env; set +a; ./gradlew :ingestion-service:runCongressGovMembers
 
 ingest-govinfo-packages:
 	@set -a; [ ! -f .env ] || . ./.env; set +a; ./gradlew :ingestion-service:runGovInfoPackages
@@ -199,6 +208,9 @@ kafka-raw-log:
 
 ingest-official-normalized:
 	@set -a; [ ! -f .env ] || . ./.env; set +a; ./gradlew :ingestion-service:runOfficialDataNormalization
+
+ingest-state-civic:
+	@set -a; [ ! -f .env ] || . ./.env; set +a; ./gradlew :ingestion-service:runStateCivicIngestion
 
 dashboard-install:
 	cd dashboard && npm install

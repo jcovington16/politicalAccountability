@@ -1,5 +1,6 @@
 package com.publicrecord.api.resources
 
+import com.publicrecord.api.services.PoliticianProfileService
 import org.slf4j.LoggerFactory
 import com.publicrecord.storage.repositories.PoliticianRepository
 import java.util.UUID
@@ -9,8 +10,9 @@ import javax.ws.rs.core.Response
 
 @Path("/politicians")
 @Produces(MediaType.APPLICATION_JSON)
-class PoliticianResource(
-    private val politicianRepository: PoliticianRepository
+class PoliticianResource @JvmOverloads constructor(
+    private val politicianRepository: PoliticianRepository,
+    private val politicianProfileService: PoliticianProfileService? = null
 ) {
 
     private val logger = LoggerFactory.getLogger(PoliticianResource::class.java)
@@ -36,6 +38,26 @@ class PoliticianResource(
         } catch (e: IllegalArgumentException) {
             Response.status(Response.Status.BAD_REQUEST)
                 .entity("Invalid UUID format").build()
+        }
+    }
+
+    @GET
+    @Path("/{id}/profile")
+    fun getPoliticianProfile(@PathParam("id") id: String): Response {
+        return try {
+            val politicianId = UUID.fromString(id)
+            val service = politicianProfileService
+                ?: return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+                    .entity("Politician profile service is not configured")
+                    .build()
+            val profile = service.findProfile(politicianId)
+            if (profile == null) {
+                Response.status(Response.Status.NOT_FOUND).entity("Politician not found").build()
+            } else {
+                Response.ok(profile).build()
+            }
+        } catch (e: IllegalArgumentException) {
+            Response.status(Response.Status.BAD_REQUEST).entity("Invalid UUID format").build()
         }
     }
 

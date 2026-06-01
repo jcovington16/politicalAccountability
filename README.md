@@ -1,7 +1,6 @@
 # Political Accountability App
 
-## 📌 Overview
-The Political Accountability App is designed to **track and store data** about politicians, their voting history, proposed bills, news articles, and media coverage. The goal is to **provide transparency** by aggregating data from various sources and presenting it in a structured manner.
+Public Record is a neutral political accountability platform for state and federal public officials. The goal is to help voters search a politician or bill and see public-record evidence: biography, offices, elections, bills, votes, public statements, claims, source citations, media/content, timeline activity, and import/audit history.
 
 Core neutrality rule:
 
@@ -10,164 +9,314 @@ We do not score politicians by ideology.
 We score information by evidence quality.
 ```
 
-The current MVP prioritizes state and federal politicians across the executive, legislative, and judicial branches. Local officials remain a planned expansion.
+The app should show what was said, voted on, sponsored, opposed, reported, cited, disputed, or verified, then let voters decide what matters to them.
 
-## 🏗️ Architecture
-The long-term direction is a **microservices architecture**, but the current running application is intentionally simpler while the product and data model are still early-stage.
+## Current Status
 
-### Current Running Architecture
-At the moment, `api-gateway` is the only HTTP application. It uses the `storage-service` Gradle module as an in-process persistence library:
+This is an early-stage MVP with a real backend foundation and sample-rich frontend fallback.
+
+Implemented:
+
+- Dropwizard API gateway.
+- PostgreSQL schema with Liquibase migrations.
+- React dashboard.
+- Expo React Native mobile MVP.
+- Local CSV/JSON ingestion.
+- Congress.gov, GovInfo, Open States, and Google Civic connector scaffolding.
+- Normalized bill/source-citation ingestion.
+- Politician profile aggregation endpoint.
+- Trust scoring model for evidence quality.
+- Source registry and citations.
+- Claims, fact checks, public statements, tags.
+- Import batch visibility.
+- Append-only audit log.
+- Admin-token protection for internal endpoints.
+
+Still in progress:
+
+- Full live data population.
+- Open States vote/action depth beyond first people/bill pulls.
+- Google Civic address/district matching UX.
+- Auth roles beyond the local admin token.
+- Public production deployment hardening.
+- Replacing dashboard/mobile sample fallback with full live API mode.
+
+## Architecture
+
+The long-term direction is microservices, but the current running system is intentionally simpler:
 
 ```text
-Client
+React dashboard / mobile app
   -> api-gateway
-     -> storage-service repositories/classes, in process
-        -> PostgreSQL / Elasticsearch / MinIO / Kafka
+     -> storage-service repositories, in process
+        -> PostgreSQL
+        -> Elasticsearch/OpenSearch
+        -> Kafka
+        -> MinIO
+
+ingestion-service
+  -> official APIs / local files
+  -> PostgreSQL
+  -> Elasticsearch/OpenSearch
+  -> Kafka raw-content when requested
 ```
 
-This means `storage-service` is **sidelined as a standalone HTTP service** for now. The module is still kept because it contains useful storage code and represents the future microservice boundary, but the app does not currently run or call a separate `storage-service:8082` server.
+`storage-service` is currently **not** a standalone HTTP service. It is kept as an in-process persistence module because the app is still early-stage and the domain model is changing. When the product stabilizes, this module can become a real storage microservice with its own server, auth, health checks, Docker service, and contract tests.
 
-Why this is the current choice:
-- The app is early-stage, and the domain model is still changing.
-- Direct repository wiring is easier to read, debug, and test right now.
-- It avoids an imaginary network dependency on a storage HTTP service that has not been implemented yet.
-- The future microservice boundary remains visible in the module structure, so it can be extracted later.
+## Modules
 
-When the app is ready to return to the microservice route, `storage-service` should get its own server entry point, REST endpoints, health checks, Docker Compose service, auth/service-to-service rules, and contract tests. At that point, `api-gateway` can switch back to a real HTTP client boundary.
-
-### **Backend Stack**
-- **Java/Kotlin (No Spring Boot)** –  Core backend services using Dropwizard for the API Gateway
-- **Gradle (Kotlin DSL)** – Build tool
-- **PostgreSQL** – Structured data storage (politicians, voting records, bills)
-- **Elasticsearch** – Full-text search for news articles and social media content.
-- **MinIO (S3-Compatible)** – Media storage for videos, audio, and images.
-- **Kafka** – Event-driven architecture for data ingestion and processing
-- **Redis** – Caching frequently accessed data
-
-### **Microservices Structure**
 | Module | Purpose |
-|--------|---------|
-| `api-gateway` | Exposes REST endpoints using Dropwizard; currently wires repositories directly. |
-| `ingestion-service` | Scrapes data from news sources, government APIs, and social media |
-| `processing-service` | Analyzes data, applies NLP for fact-checking, and enriches records |
-| `storage-service` | Currently an in-process storage library. Later, this is the intended standalone storage microservice. |
-| `event-streaming` | Processes Kafka events for real-time updates. |
-| `common` | Contains shared models, utilities, and configuration classes. |
+| --- | --- |
+| `api-gateway` | Dropwizard HTTP API. Public search/read endpoints plus protected internal import/audit endpoints. |
+| `storage-service` | Repository layer, storage configs, managed service wrappers, Liquibase changelog resources. |
+| `ingestion-service` | Local file imports and official API connectors. |
+| `processing-service` | Placeholder for enrichment/NLP/fact processing workflows. |
+| `event-streaming` | Kafka/event-streaming support. |
+| `common` | Shared models, trust scoring, JSON/event utilities. |
+| `dashboard` | React web dashboard. |
+| `mobile` | Expo React Native voter MVP. |
 
-## Database Migrations
-Database schema changes are managed with Liquibase Community.
+## Local Environment
 
-The changelog lives in:
+The local `.env` file is ignored by Git.
 
-```text
-storage-service/src/main/resources/db/changelog/db.changelog-master.xml
-storage-service/src/main/resources/db/changelog/changes/
-```
-
-Use the Makefile targets instead of running raw Liquibase commands:
-
-```sh
-make db-status
-make db-migrate
-make db-validate
-make db-history
-make db-rollback
-make db-new name=add_content_indexes
-make db-tag tag=before_large_change
-```
-
-Local configuration is read from environment variables or a local `.env` file. Start from:
+Create or update it from:
 
 ```sh
 cp .env.example .env
 ```
 
-Do not commit `.env` or real database credentials. The committed defaults are only for local Docker development.
-
-Liquibase is used as a developer/deployment tool, not as application boot logic. That keeps migration credentials out of the API runtime and makes schema changes intentional.
-
-## Event Processing
-The ingestion and processing services exchange content with a shared Jackson-backed event contract:
-
-```text
-ingestion-service -> Kafka raw-content -> processing-service -> Kafka processed-content -> processed content sink -> PostgreSQL
-```
-
-The processed content sink currently persists processed `ContentItem` events to PostgreSQL through `ContentItemRepository`. Elasticsearch indexing and MinIO media writes should be added to that sink once those contracts are concrete.
-
-## Configuration And Security Notes
-Local development keeps Docker-friendly defaults, but production should provide secrets and endpoints through environment-specific configuration:
+Important local values:
 
 ```sh
-APP_ENV=production
-DATABASE_URL=jdbc:postgresql://...
-DATABASE_USER=...
-DATABASE_PASSWORD=...
-KAFKA_BOOTSTRAP_SERVERS=...
-ELASTICSEARCH_URL=...
-MINIO_ENDPOINT=...
-MINIO_ACCESS_KEY=...
-MINIO_SECRET_KEY=...
+DATABASE_URL=jdbc:postgresql://localhost:5432/political_data
+DATABASE_USER=postgres
+DATABASE_PASSWORD=postgres
+ADMIN_API_TOKEN=local-admin-token
+
+CONGRESS_API_KEY=
+GOVINFO_API_KEY=
+OPENSTATES_API_KEY=
+GOOGLE_CIVIC_API_KEY=
+GOOGLE_CIVIC_ADDRESS=
 ```
 
-When `APP_ENV=production`, startup validation requires database and MinIO secrets and rejects wildcard CORS origins. CORS is wired in the Dropwizard servlet layer and defaults to local frontend origins only.
+Paste real API keys into `.env` locally only. Do not commit `.env`.
 
-Kafka and Elasticsearch are still local-development posture in `docker-compose.yml`. Before production use, enable service authentication/TLS or private-network-only access for Kafka, Elasticsearch, PostgreSQL, and MinIO.
+## Running Locally
 
-## Local File Ingestion
-The local ingestion pipeline imports CSV or JSON files into PostgreSQL and indexes searchable fields into Elasticsearch/OpenSearch.
+Start infrastructure:
 
-Run migrations first:
+```sh
+make dev
+```
+
+Apply database migrations:
 
 ```sh
 make db-migrate
 ```
 
-Then import a directory:
+Run the API:
 
 ```sh
+make run
+```
+
+Run the dashboard:
+
+```sh
+make dashboard-install
+make dashboard-dev
+```
+
+Run the mobile app:
+
+```sh
+make mobile-install
+make mobile-start
+```
+
+Useful URLs:
+
+```text
+Dashboard: http://localhost:5173 or the next available Vite port
+API:       http://localhost:8080
+Admin:     http://localhost:8081
+Postgres:  localhost:5432
+Kafka:     localhost:29092 from host, kafka:9092 from containers
+MinIO:     http://localhost:9000
+```
+
+If the dashboard API is unavailable or the database has no matching live data, it falls back to sample data so UI work can continue.
+
+## Data Ingestion
+
+### Local CSV/JSON
+
+Import local files:
+
+```sh
+make ingest-dry-run
 make ingest-local dir=data/ingestion
 ```
 
-The importer looks for these files:
+`make ingest-dry-run` validates the sample CSV/JSON templates without writing to PostgreSQL. It checks required fields, UUID/date formats, vote values, and politician/bill references so bad files are caught before import.
+
+Supported file names:
 
 ```text
-politicians.csv or politicians.json
-bills.csv or bills.json
-votes.csv or votes.json
-news_articles.csv, news_articles.json, news.csv, or news.json
+politicians.csv / politicians.json
+bills.csv / bills.json
+votes.csv / votes.json
+news_articles.csv / news_articles.json
 ```
 
-Recommended columns:
+Templates live in `data/templates/`.
+
+### Congress.gov And GovInfo
+
+Fetch raw events:
+
+```sh
+make ingest-congress-bills
+make ingest-govinfo-packages
+```
+
+Fetch Congress.gov member profiles:
+
+```sh
+make ingest-congress-members
+```
+
+For a state-focused federal seed, set for example:
+
+```sh
+CONGRESS_MEMBER_STATE=FL
+CONGRESS_CURRENT_MEMBER=false
+CONGRESS_MEMBER_LIMIT=250
+```
+
+Normalize official federal data into PostgreSQL:
+
+```sh
+make ingest-official-normalized
+```
+
+This writes bills, bill actions, source registry entries, source citations, import batches, row results, and audit events.
+
+### Open States And Google Civic
+
+Fetch state/civic data:
+
+```sh
+make ingest-state-civic
+```
+
+Relevant `.env` values:
+
+```sh
+OPENSTATES_API_KEY=...
+OPENSTATES_JURISDICTION=ocd-jurisdiction/country:us/state:co/government
+OPENSTATES_SESSION=
+OPENSTATES_LIMIT=25
+
+GOOGLE_CIVIC_API_KEY=...
+GOOGLE_CIVIC_ADDRESS="Denver, CO"
+```
+
+Open States currently seeds state politicians and bills. Google Civic seeds address-based representative context. Imported records get `external_identifiers` so future pulls update existing records instead of duplicating them.
+
+## API Overview
+
+Public read/search endpoints:
 
 ```text
-politicians: id, first_name, last_name, full_name, party, state, office, biography, profile_image_url, start_date, end_date
-bills: id, bill_number, title, description, introduced_by, status, introduced_date, last_action_date, bill_url
-votes: id, politician_id, bill_id, vote_type, vote_date
-news_articles: id, politician_id, title, source, published_date, url, content
+GET /politicians/{id}
+GET /politicians/{id}/profile
+GET /politicians/search/name?name=...
+GET /politicians/state/{state}
+GET /politicians/party/{party}
+
+GET /bills/search?query=...
+GET /bills/{id}
+GET /bills/{id}/actions
+GET /bills/{id}/citations
+
+GET /politicians/{politicianId}/votes
+GET /bills/{billId}/votes
+
+POST /trust/score
 ```
 
-Validation is intentionally strict for identifiers and required fields. Invalid rows are skipped and logged; valid rows are upserted. Search indexing failures are logged but do not roll back PostgreSQL imports, because PostgreSQL is the source of truth.
-
-The current schema is **not yet complete** for the full political-accountability domain. It has politicians, bills, votes, media files, content items, provenance, and news articles. Offices, elections, source citations, public-statement-specific records, fact checks, richer tags, and audit history still need dedicated migrations before that model should be considered production-complete.
-
-The Day 1 foundation map is documented in `docs/DAY_1_FOUNDATION.md`.
-
-Day 2 added the first office/election model needed for state and federal scope:
+Internal/admin endpoints:
 
 ```text
-offices
-politician_offices
-elections
-election_candidates
+GET /imports
+GET /imports?status=COMPLETED
+GET /imports/{id}
+GET /imports/{id}/rows
+GET /imports/{id}/rows?status=FAILED
+GET /audit-log
 ```
 
-Identity matching rules are documented in `docs/IDENTITY_MATCHING.md`, and environment variables are inventoried in `docs/ENVIRONMENT.md`.
+Admin endpoints require:
 
-External API ingestion is documented in `docs/API_INGESTION.md`. The first wired connectors are Congress.gov and GovInfo. Use `make ingest-congress-bills` or `make ingest-govinfo-packages` to inspect raw events, and `make ingest-official-normalized` to write official bills, actions, citations, and import audit rows into PostgreSQL.
+```text
+X-Admin-Token: <ADMIN_API_TOKEN>
+```
+
+Local default:
+
+```text
+X-Admin-Token: local-admin-token
+```
+
+Use a long random `ADMIN_API_TOKEN` outside local development.
+
+## Politician Profile Aggregation
+
+The main profile endpoint is:
+
+```text
+GET /politicians/{politicianId}/profile
+```
+
+It returns:
+
+- politician record
+- voting records
+- voted bills
+- bills supported
+- bills opposed
+- bills sponsored
+- content items
+- source citations
+- timeline items
+
+This is the endpoint the web and mobile profile screens should converge on as live data grows.
+
+## Search Behavior
+
+Current dashboard behavior:
+
+1. Try the real API.
+2. If the API is down or returns no matches, show matching sample fallback data.
+
+Bill backend behavior:
+
+1. Search PostgreSQL first.
+2. If no local bill match and `CONGRESS_API_KEY` is set, fetch a small Congress.gov slice.
+3. Store matching bills.
+4. Search PostgreSQL again and return stored records.
+
+Politician backend search is currently database-backed. Open States and Google Civic ingestion are the next source of real politician records.
 
 ## Trust Scoring
-Political information is classified before it is treated as equally reliable. The current trust scoring model separates:
+
+The app scores information quality, not ideology.
+
+Information types:
 
 ```text
 VERIFIED_FACT
@@ -178,18 +327,7 @@ OPINION_PIECE
 UNRESOLVED_CLAIM
 ```
 
-Each score includes:
-
-```text
-sourceQuality
-citationCount
-recencyDays
-confidenceLevel
-score
-explanation
-```
-
-Source quality values are:
+Source qualities:
 
 ```text
 OFFICIAL_RECORD
@@ -200,7 +338,7 @@ SOCIAL_MEDIA
 UNKNOWN
 ```
 
-The API exposes a scoring helper:
+Example:
 
 ```http
 POST /trust/score
@@ -214,183 +352,136 @@ Content-Type: application/json
 }
 ```
 
-## 🔹 Database Schema
-### **Politicians Table**
-```sql
-CREATE TABLE politicians (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    full_name VARCHAR(255) NOT NULL,
-    party VARCHAR(50),
-    state VARCHAR(50),
-    office VARCHAR(100),
-    start_date DATE,
-    end_date DATE NULL,
-    profile_image_url TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-```
+## Database
 
-### **Voting Records Table**
-```sql
-CREATE TABLE voting_records (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    politician_id UUID REFERENCES politicians(id) ON DELETE CASCADE,
-    bill_id UUID REFERENCES bills(id),
-    vote_type VARCHAR(20) CHECK (vote_type IN ('YEA', 'NAY', 'ABSTAIN')),
-    vote_date DATE NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-### **News Articles Table**
-```sql
-CREATE TABLE news_articles (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    politician_id UUID REFERENCES politicians(id) ON DELETE SET NULL,
-    title TEXT NOT NULL,
-    source VARCHAR(255) NOT NULL,
-    published_date TIMESTAMP,
-    url TEXT UNIQUE NOT NULL,
-    content TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-## 🚀 Running the Application
-### **1️⃣ Set Up PostgreSQL**
-```sh
-docker run --name postgres -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=secret -p 5432:5432 -d postgres
-```
-
-### **2️⃣ Set Up MinIO for Media Storage**
-```sh
-docker run -p 9000:9000 -p 9001:9001 \
-  -e "MINIO_ROOT_USER=admin" -e "MINIO_ROOT_PASSWORD=secretpass" \
-  quay.io/minio/minio server /data --console-address ":9001"
-```
-
-### **3️⃣ Run Kafka for Event Streaming**
-```sh
-docker-compose up -d kafka zookeeper
-```
-
-### **4️⃣ Build and Run Services**
-```sh
-./gradlew clean build
-./gradlew :api-gateway:run
-```
-
-## 📡 API Endpoints
-### **Get Politician Details**
-```http
-GET /api/politicians/{id}
-```
-Response:
-```json
-{
-  "id": "1234-5678",
-  "full_name": "John Doe",
-  "party": "Independent",
-  "state": "NY",
-  "office": "Senator",
-  "start_date": "2018-01-01",
-  "end_date": null
-}
-```
-
-### **Search News Articles**
-```http
-GET /api/news?query=tax+reform
-```
-
-### **Search Bills**
-```http
-GET /bills/search?query=healthcare&status=Pending
-```
-
-### **Get Bill Details**
-```http
-GET /bills/{id}
-```
-
-### **Get Politician Voting Records**
-```http
-GET /politicians/{politicianId}/votes
-```
-
-### **Get Votes For A Bill**
-```http
-GET /bills/{billId}/votes
-```
-
-## React Dashboard
-The React dashboard lives in `dashboard/`.
+Migrations are managed by Liquibase.
 
 ```sh
-make dashboard-install
+make db-status
+make db-migrate
+make db-validate
+make db-history
+make db-rollback
+make db-new name=add_short_description
+```
+
+Major schema areas:
+
+- politicians
+- offices
+- politician offices
+- elections
+- election candidates
+- bills
+- bill actions
+- voting records
+- media files
+- content items
+- news articles
+- source registry
+- source citations
+- public statements
+- claims
+- fact checks
+- tags/taggings
+- import batches
+- import row results
+- audit log
+- external identifiers
+
+## Audit And Import Visibility
+
+Every official normalized import creates an import batch and row result records. The audit log is append-only at the database layer using triggers that block update/delete.
+
+Use import visibility to answer:
+
+- Which import ran?
+- Which source did it use?
+- How many records were seen/imported/skipped?
+- Which rows failed?
+- What source identifiers map to internal records?
+
+## Frontend Apps
+
+### Dashboard
+
+The dashboard is a voter/admin MVP that supports:
+
+- politician search
+- bill search
+- politician profile tabs
+- voting records
+- bills supported/opposed
+- statements
+- controversies
+- accomplishments
+- citations
+- timeline
+- internal security/integrity view
+
+Run:
+
+```sh
 make dashboard-dev
 ```
 
-The dashboard runs on:
+### Mobile
 
-```text
-http://localhost:5173
-```
+The mobile MVP uses Expo and supports:
 
-It proxies `/api/*` to the Dropwizard API on `http://localhost:8080`. If the API is not running, the dashboard falls back to sample data so the interface remains usable during frontend work.
+- search
+- bill search
+- politician profile
+- voting record
+- issue stance
+- timeline
+- compare politicians
+- saved politicians
+- source citations
+- bill detail
 
-Primary dashboard areas:
-
-```text
-Politician search
-Biography and profile summary
-Voting record
-Bills supported/opposed
-Public statements
-Controversies and unresolved claims
-Accomplishments
-Source citations
-Timeline of activity
-Security and integrity controls
-```
-
-The Security tab tracks controls for data integrity, misinformation risk, source manipulation, prompt injection, scraping risks, privacy, authorization, audit logs, and abuse prevention.
-
-The Security tab is an internal builder/admin view. It should not be exposed in the public voter-facing app.
-
-## React Native Mobile MVP
-The voter mobile MVP lives in `mobile/` and uses Expo so the same codebase can run on iOS, Android, and web preview.
+Run:
 
 ```sh
-make mobile-install
 make mobile-start
-make mobile-typecheck
 ```
 
-Implemented MVP screens:
+App store packaging is configured through `mobile/app.json` and `mobile/eas.json`, but production release still needs store accounts, screenshots, privacy policy, icons, data-safety forms, and production API config.
+
+## Security Notes
+
+- `.env` is ignored and must not be committed.
+- External API keys are server-side only.
+- Admin import/audit endpoints require `X-Admin-Token`.
+- Production must not use `local-admin-token`.
+- Production must not use wildcard CORS.
+- Kafka, Elasticsearch, PostgreSQL, and MinIO need private networking or auth/TLS before production exposure.
+- The Security dashboard tab is internal/admin only and should not be part of the public voter experience.
+- The current Week 1 threat model is documented in `docs/THREAT_MODEL.md`.
+
+## Verification Commands
+
+```sh
+./gradlew test
+./gradlew :storage-service:integrationTest
+DATABASE_URL=offline:postgresql ./scripts/db/liquibase.sh validate
+make ingest-dry-run
+cd dashboard && npm run build
+cd mobile && npm run typecheck
+```
+
+## Build Plan
+
+The detailed 30-day implementation plan is tracked in:
 
 ```text
-Search
-Bill search
-Politician profile
-Voting record
-Issue stance
-Timeline
-Bill detail
-Compare two politicians
-Saved politicians
-Source citations
+docs/30_DAY_BUILD_PLAN.md
 ```
 
-The app currently uses local sample data that mirrors the React dashboard. Voters can search for politicians, search for bills, open a politician's vote/bill cards, and view a bill detail screen with status, sponsor, dates, source URL, and votes for/against. The next implementation step is wiring these screens to the Dropwizard API endpoints and production API configuration.
+## Contributors
 
-App store packaging is configured through `mobile/app.json` and `mobile/eas.json`. Publishing still requires Apple Developer and Google Play accounts, production icons/screenshots, a privacy policy URL, and completed store data-safety forms.
+- Joshua Covington
 
-## 30-Day Build Plan
-The detailed 30-day implementation plan is tracked in `docs/30_DAY_BUILD_PLAN.md`.
+## License
 
-## 👥 Contributors
-- **Joshua Covington** – Lead Developer
-
-## 📜 License
-This project is licensed under the **MIT License**.
+MIT

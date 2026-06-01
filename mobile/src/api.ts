@@ -55,7 +55,7 @@ async function getJson<T>(path: string): Promise<T> {
 }
 
 export function searchPoliticians(query: string): Promise<Politician[]> {
-  return getJson<Politician[]>(`/politicians/search?q=${encodeURIComponent(query)}`);
+  return getJson<Politician[]>(`/politicians/search/name?name=${encodeURIComponent(query)}`);
 }
 
 export function getPoliticianProfile(politicianId: string): Promise<PoliticianProfileResponse> {

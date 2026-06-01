@@ -6,13 +6,20 @@ import com.publicrecord.storage.repositories.BillRepository
 import com.publicrecord.storage.repositories.SourceCitationRepository
 import java.util.UUID
 
-class BillService(
+class BillService @JvmOverloads constructor(
     private val billRepository: BillRepository,
-    private val sourceCitationRepository: SourceCitationRepository
+    private val sourceCitationRepository: SourceCitationRepository,
+    private val congressBackfillService: CongressBillBackfillService? = null
 ) {
     fun findById(id: UUID): BillDto? = billRepository.findById(id)?.toDto()
 
     fun search(query: String?, status: String?, limit: Int): List<BillDto> {
+        val local = billRepository.search(query, status, limit)
+        if (local.isNotEmpty() || query.isNullOrBlank()) {
+            return local.map { it.toDto() }
+        }
+
+        congressBackfillService?.backfill(query, limit)
         return billRepository.search(query, status, limit).map { it.toDto() }
     }
 

@@ -63,6 +63,24 @@ The connector emits raw content events with:
 
 Downstream processors should map these events into normalized bill, source citation, action, sponsor, and search-index records.
 
+## Congress.gov Members
+
+Congress.gov member profiles can seed federal politician search:
+
+```sh
+make ingest-congress-members
+```
+
+Optional controls:
+
+```sh
+CONGRESS_MEMBER_STATE=FL
+CONGRESS_CURRENT_MEMBER=false
+CONGRESS_MEMBER_LIMIT=250
+```
+
+This importer writes `politicians`, `source_citations`, and `external_identifiers` rows using Congress.gov BioGuide IDs as the stable external identifier.
+
 ## GovInfo Packages
 
 GovInfo provides official package summaries and content links for congressional bills, bill status, Congressional Record, public laws, Federal Register, and other government documents.
@@ -134,6 +152,72 @@ GET /bills/{billId}
 GET /bills/{billId}/actions
 GET /bills/{billId}/citations
 ```
+
+## Search Backfill Behavior
+
+The app uses a cache-first search model:
+
+1. Search PostgreSQL first.
+2. If bill search has no local matches and `CONGRESS_API_KEY` is configured, fetch a small official slice from Congress.gov.
+3. Store matching bills in PostgreSQL.
+4. Re-run the database search and return stored records to the web/mobile app.
+
+This keeps PostgreSQL as the source of truth while still letting the app become more useful as voters search. Politician search is currently database-backed; external politician backfill should use Open States and Google Civic next because names alone are not reliable enough for jurisdiction matching.
+
+## State And Civic Ingestion
+
+Open States API v3 is used for state legislative people and bills. Its root URL is `https://v3.openstates.org/`, API keys are required, and keys can be sent in the `X-API-KEY` header. Google Civic is used for address-based representative context; Google requires an API key for requests.
+
+Run:
+
+```sh
+make ingest-state-civic
+```
+
+Required/optional `.env` values:
+
+```sh
+OPENSTATES_API_KEY=...
+OPENSTATES_JURISDICTION=ocd-jurisdiction/country:us/state:co/government
+OPENSTATES_LIMIT=25
+GOOGLE_CIVIC_API_KEY=...
+GOOGLE_CIVIC_ADDRESS="Denver, CO"
+```
+
+The importer upserts politicians, bills, source citations, and `external_identifiers` records. Those external identifiers are the dedupe bridge that lets future Open States/Google Civic pulls update the same internal records instead of creating duplicates.
+
+## Politician Profile Aggregation
+
+The API exposes a profile aggregation endpoint for the web and mobile politician pages:
+
+```sh
+GET /politicians/{politicianId}/profile
+```
+
+The response groups the politician record with voting records, bills supported/opposed, sponsored bills, content items, citations, and timeline items. Open States and Google Civic ingestion should feed this endpoint by adding authoritative politicians, offices, bills, votes, source citations, and election context to PostgreSQL.
+
+## Import Visibility
+
+Import runs are visible through API endpoints:
+
+```sh
+GET /imports
+GET /imports?status=COMPLETED
+GET /imports/{importBatchId}
+GET /imports/{importBatchId}/rows
+GET /imports/{importBatchId}/rows?status=FAILED
+GET /audit-log
+```
+
+`import_batches` shows run-level status and counts. `import_row_results` shows per-row imported/skipped/failed outcomes and messages. `audit_log` is append-only and records system import completion events plus future admin/source/trust changes.
+
+These endpoints are internal/admin-only. Requests must include:
+
+```sh
+X-Admin-Token: <ADMIN_API_TOKEN>
+```
+
+Local development defaults to `local-admin-token`; shared and production environments must provide a long random `ADMIN_API_TOKEN`.
 
 ## Rate Limits
 

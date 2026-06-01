@@ -1,6 +1,9 @@
 package com.publicrecord.storage.repositories;
 
 import com.publicrecord.common.models.ContentItem;
+import com.publicrecord.common.models.AuditLogEntry;
+import com.publicrecord.common.models.ImportBatch;
+import com.publicrecord.common.models.ImportRowResult;
 import com.publicrecord.common.models.Politician;
 import com.publicrecord.storage.config.DatabaseConfig;
 import liquibase.Liquibase;
@@ -39,6 +42,8 @@ class RepositoryIntegrationTest {
     static DatabaseConfig databaseConfig;
     static PoliticianRepository politicianRepository;
     static ContentItemRepository contentItemRepository;
+    static ImportRepository importRepository;
+    static AuditLogRepository auditLogRepository;
 
     @BeforeAll
     static void setUpDatabase() throws Exception {
@@ -53,6 +58,90 @@ class RepositoryIntegrationTest {
 
         politicianRepository = new PoliticianRepository(databaseConfig);
         contentItemRepository = new ContentItemRepository(databaseConfig);
+        importRepository = new ImportRepository(databaseConfig);
+        auditLogRepository = new AuditLogRepository(databaseConfig);
+    }
+
+    @Test
+    @DisplayName("Should expose import batches, row results, and append-only audit logs")
+    void shouldExposeImportBatchesRowsAndAppendOnlyAuditLogs() throws Exception {
+        UUID batchId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+
+        try (Connection connection = DriverManager.getConnection(
+                postgres.getJdbcUrl(),
+                postgres.getUsername(),
+                postgres.getPassword()
+        )) {
+            try (PreparedStatement stmt = connection.prepareStatement("""
+                    INSERT INTO import_batches
+                    (id, source_system, source_detail, status, completed_at, records_seen, records_imported, records_skipped, source_checksum, metadata)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?::jsonb)
+                    """)) {
+                stmt.setObject(1, batchId);
+                stmt.setString(2, "test-importer");
+                stmt.setString(3, "unit-test.csv");
+                stmt.setString(4, "COMPLETED");
+                stmt.setInt(5, 2);
+                stmt.setInt(6, 1);
+                stmt.setInt(7, 1);
+                stmt.setString(8, "sha256:test");
+                stmt.setString(9, "{\"file\":\"unit-test.csv\"}");
+                stmt.executeUpdate();
+            }
+
+            try (PreparedStatement stmt = connection.prepareStatement("""
+                    INSERT INTO import_row_results
+                    (import_batch_id, source_record_id, target_type, target_id, status, message, row_payload)
+                    VALUES (?, ?, ?, ?, ?, ?, ?::jsonb)
+                    """)) {
+                stmt.setObject(1, batchId);
+                stmt.setString(2, "row-1");
+                stmt.setString(3, "BILL");
+                stmt.setObject(4, targetId);
+                stmt.setString(5, "IMPORTED");
+                stmt.setString(6, "Imported test row");
+                stmt.setString(7, "{\"billNumber\":\"HR-1\"}");
+                stmt.executeUpdate();
+            }
+        }
+
+        assertThat(auditLogRepository.append(
+                "SYSTEM",
+                "IMPORT_COMPLETED",
+                "IMPORT_BATCH",
+                null,
+                batchId,
+                "test-importer",
+                batchId,
+                "request-1",
+                "{\"recordsSeen\":2}"
+        )).isTrue();
+
+        ImportBatch batch = importRepository.findBatch(batchId);
+        assertThat(batch).isNotNull();
+        assertThat(batch.getSourceSystem()).isEqualTo("test-importer");
+        assertThat(batch.getSourceChecksum()).isEqualTo("sha256:test");
+        assertThat(importRepository.findBatches("COMPLETED", 10)).extracting(ImportBatch::getId).contains(batchId);
+
+        java.util.List<ImportRowResult> rows = importRepository.findRows(batchId, "IMPORTED", 10);
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).getSourceRecordId()).isEqualTo("row-1");
+
+        java.util.List<AuditLogEntry> auditEntries = auditLogRepository.findRecent(10);
+        assertThat(auditEntries).extracting(AuditLogEntry::getAction).contains("IMPORT_COMPLETED");
+
+        try (Connection connection = DriverManager.getConnection(
+                postgres.getJdbcUrl(),
+                postgres.getUsername(),
+                postgres.getPassword()
+        )) {
+            try (PreparedStatement stmt = connection.prepareStatement("UPDATE audit_log SET action = 'CHANGED' WHERE import_batch_id = ?")) {
+                stmt.setObject(1, batchId);
+                org.assertj.core.api.Assertions.assertThatThrownBy(stmt::executeUpdate)
+                        .hasMessageContaining("audit_log is append-only");
+            }
+        }
     }
 
     @Test

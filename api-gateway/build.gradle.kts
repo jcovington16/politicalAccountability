@@ -47,4 +47,12 @@ dependencies {
     // Testing
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.1")
     testImplementation("io.dropwizard:dropwizard-testing:2.1.6")
+    testImplementation("org.mockito:mockito-core:5.11.0")
+}
+
+tasks.register<JavaExec>("runApiGateway") {
+    group = "application"
+    description = "Run the Dropwizard API gateway with local configuration"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.publicrecord.api.App")
 }

@@ -40,6 +40,7 @@ class OfficialDataNormalizer(private val conn: Connection) {
         }
 
         completeBatch(batchId, events.size, imported, skipped)
+        recordAudit(batchId, sourceSystem, events.size, imported, skipped)
         return NormalizeResult(batchId, imported, skipped)
     }
 
@@ -131,7 +132,7 @@ class OfficialDataNormalizer(private val conn: Connection) {
         val sourceId = stableUuid("source:$sourceName")
         val citationId = stableUuid("citation:$citationType:$targetId:$url")
 
-        conn.prepareStatement(
+        val actualSourceId = conn.prepareStatement(
             """
             INSERT INTO source_registry (id, name, source_type, homepage_url, reputation_score)
             VALUES (?, ?, ?, ?, ?)
@@ -139,6 +140,7 @@ class OfficialDataNormalizer(private val conn: Connection) {
                 source_type = EXCLUDED.source_type,
                 reputation_score = EXCLUDED.reputation_score,
                 updated_at = CURRENT_TIMESTAMP
+            RETURNING id
             """.trimIndent()
         ).use { stmt ->
             stmt.setObject(1, sourceId)
@@ -146,7 +148,9 @@ class OfficialDataNormalizer(private val conn: Connection) {
             stmt.setString(3, sourceQuality)
             stmt.setString(4, homepageFor(sourceName))
             stmt.setBigDecimal(5, java.math.BigDecimal("99.00"))
-            stmt.executeUpdate()
+            val rs = stmt.executeQuery()
+            rs.next()
+            rs.getObject("id") as UUID
         }
 
         conn.prepareStatement(
@@ -161,7 +165,7 @@ class OfficialDataNormalizer(private val conn: Connection) {
             """.trimIndent()
         ).use { stmt ->
             stmt.setObject(1, citationId)
-            stmt.setObject(2, sourceId)
+            stmt.setObject(2, actualSourceId)
             stmt.setString(3, citationType)
             stmt.setObject(4, targetId)
             stmt.setString(5, title)
@@ -236,6 +240,25 @@ class OfficialDataNormalizer(private val conn: Connection) {
             stmt.setString(5, status)
             stmt.setString(6, message)
             stmt.setString(7, ContentEventJson.toJson(event))
+            stmt.executeUpdate()
+        }
+    }
+
+    private fun recordAudit(batchId: UUID, sourceSystem: String, seen: Int, imported: Int, skipped: Int) {
+        conn.prepareStatement(
+            """
+            INSERT INTO audit_log
+            (actor_type, action, target_type, target_id, source_system, import_batch_id, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?::jsonb)
+            """.trimIndent()
+        ).use { stmt ->
+            stmt.setString(1, "SYSTEM")
+            stmt.setString(2, "IMPORT_COMPLETED")
+            stmt.setString(3, "IMPORT_BATCH")
+            stmt.setObject(4, batchId)
+            stmt.setString(5, sourceSystem)
+            stmt.setObject(6, batchId)
+            stmt.setString(7, """{"recordsSeen":$seen,"recordsImported":$imported,"recordsSkipped":$skipped}""")
             stmt.executeUpdate()
         }
     }

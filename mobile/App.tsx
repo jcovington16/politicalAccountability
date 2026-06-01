@@ -42,7 +42,7 @@ export default function App() {
     const value = query.trim().toLowerCase();
     if (!value) return bills;
     return bills.filter((bill) =>
-      `${bill.billNumber} ${bill.title} ${bill.summary} ${bill.sponsor} ${bill.status}`
+      `${bill.billNumber} ${bill.title} ${bill.description} ${bill.sponsor} ${bill.status}`
         .toLowerCase()
         .includes(value),
     );
@@ -264,9 +264,9 @@ function BillDetailScreen({
   onOpenPolitician: (person: Politician) => void;
 }) {
   const votesForBill = billVotes[bill.id] ?? [];
-  const yea = votesForBill.filter((vote) => vote.vote === 'YEA');
-  const nay = votesForBill.filter((vote) => vote.vote === 'NAY');
-  const abstain = votesForBill.filter((vote) => vote.vote === 'ABSTAIN');
+  const yea = votesForBill.filter((vote) => vote.voteType === 'YEA');
+  const nay = votesForBill.filter((vote) => vote.voteType === 'NAY');
+  const abstain = votesForBill.filter((vote) => vote.voteType === 'ABSTAIN');
 
   return (
     <View style={styles.stack}>
@@ -277,7 +277,7 @@ function BillDetailScreen({
         <Text style={styles.eyebrow}>{bill.jurisdiction} · {bill.chamber}</Text>
         <Text style={styles.title}>{bill.billNumber}</Text>
         <Text style={styles.rowTitle}>{bill.title}</Text>
-        <Text style={styles.body}>{bill.summary}</Text>
+        <Text style={styles.body}>{bill.description}</Text>
         <Badge label={bill.status} tone={bill.status === 'Passed' ? 'good' : 'neutral'} />
       </Card>
       <View style={styles.metricRow}>
@@ -290,7 +290,7 @@ function BillDetailScreen({
         <Text style={styles.body}>Introduced by {bill.sponsor}</Text>
         <Text style={styles.body}>Introduced {bill.introducedDate}</Text>
         <Text style={styles.body}>Last action {bill.lastActionDate ?? 'Unknown'}</Text>
-        <Text style={styles.body}>{bill.sourceUrl}</Text>
+        <Text style={styles.body}>{bill.billUrl}</Text>
       </Card>
       <Text style={styles.label}>Votes For</Text>
       {yea.map((vote) => <BillVoteRow key={vote.id} vote={vote} onOpenPolitician={onOpenPolitician} />)}
@@ -311,8 +311,8 @@ function BillVoteRow({
     politicianName: string;
     party: string;
     state: string;
-    vote: 'YEA' | 'NAY' | 'ABSTAIN';
-    date: string;
+    voteType: 'YEA' | 'NAY' | 'ABSTAIN';
+    voteDate: string;
   };
   onOpenPolitician: (person: Politician) => void;
 }) {
@@ -323,9 +323,9 @@ function BillVoteRow({
     <Card>
       <View style={styles.split}>
         <Text style={styles.rowTitle}>{vote.politicianName}</Text>
-        <Badge label={vote.vote} tone={vote.vote === 'YEA' ? 'good' : vote.vote === 'NAY' ? 'warn' : 'neutral'} />
+        <Badge label={vote.voteType} tone={vote.voteType === 'YEA' ? 'good' : vote.voteType === 'NAY' ? 'warn' : 'neutral'} />
       </View>
-      <Text style={styles.muted}>{vote.party} · {vote.state} · {vote.date}</Text>
+      <Text style={styles.muted}>{vote.party} · {vote.state} · {vote.voteDate}</Text>
     </Card>
     </Pressable>
   );
@@ -417,8 +417,8 @@ function ProfileScreen({ politician }: { politician: Politician }) {
 }
 
 function BillsScreen({ onOpenBill }: { onOpenBill: (bill: Bill) => void }) {
-  const supported = votes.filter((vote) => vote.vote === 'YEA');
-  const opposed = votes.filter((vote) => vote.vote === 'NAY');
+  const supported = votes.filter((vote) => vote.voteType === 'YEA');
+  const opposed = votes.filter((vote) => vote.voteType === 'NAY');
   return (
     <View style={styles.stack}>
       <Text style={styles.label}>Supported</Text>
@@ -426,7 +426,7 @@ function BillsScreen({ onOpenBill }: { onOpenBill: (bill: Bill) => void }) {
         <Pressable key={vote.id} onPress={() => onOpenBill(bills.find((bill) => bill.id === vote.billId) ?? bills[0])}>
         <Card>
           <Text style={styles.rowTitle}>{vote.billNumber}</Text>
-          <Text style={styles.body}>{vote.title}</Text>
+          <Text style={styles.body}>{vote.billTitle}</Text>
         </Card>
         </Pressable>
       ))}
@@ -435,7 +435,7 @@ function BillsScreen({ onOpenBill }: { onOpenBill: (bill: Bill) => void }) {
         <Pressable key={vote.id} onPress={() => onOpenBill(bills.find((bill) => bill.id === vote.billId) ?? bills[0])}>
         <Card>
           <Text style={styles.rowTitle}>{vote.billNumber}</Text>
-          <Text style={styles.body}>{vote.title}</Text>
+          <Text style={styles.body}>{vote.billTitle}</Text>
         </Card>
         </Pressable>
       ))}
@@ -473,10 +473,10 @@ function VotingScreen({ onOpenBill }: { onOpenBill: (bill: Bill) => void }) {
         <Card>
           <View style={styles.split}>
             <Text style={styles.rowTitle}>{vote.billNumber}</Text>
-            <Badge label={vote.vote} tone={vote.vote === 'YEA' ? 'good' : 'warn'} />
+            <Badge label={vote.voteType} tone={vote.voteType === 'YEA' ? 'good' : 'warn'} />
           </View>
-          <Text style={styles.body}>{vote.title}</Text>
-          <Text style={styles.muted}>{vote.date}</Text>
+          <Text style={styles.body}>{vote.billTitle}</Text>
+          <Text style={styles.muted}>{vote.voteDate}</Text>
         </Card>
         </Pressable>
       ))}
