@@ -1,5 +1,6 @@
 package com.publicrecord.api.services
 
+import com.publicrecord.api.dto.BillDetailDto
 import com.publicrecord.api.dto.BillDto
 import com.publicrecord.api.dto.toDto
 import com.publicrecord.storage.repositories.BillRepository
@@ -13,14 +14,27 @@ class BillService @JvmOverloads constructor(
 ) {
     fun findById(id: UUID): BillDto? = billRepository.findById(id)?.toDto()
 
+    fun findDetail(id: UUID, limit: Int, votingRecordService: VotingRecordService?): BillDetailDto? {
+        val bill = billRepository.findById(id) ?: return null
+        val sponsors = billRepository.findSponsors(id).map { it.toDto() }
+        return BillDetailDto(
+            bill = bill.toDto(),
+            sponsors = sponsors.filter { it.sponsorType == "SPONSOR" },
+            cosponsors = sponsors.filter { it.sponsorType == "COSPONSOR" },
+            actions = billRepository.findActions(id, limit),
+            citations = sourceCitationRepository.findByTarget("BILL", id, limit),
+            votes = votingRecordService?.findByBillId(id, limit) ?: emptyList()
+        )
+    }
+
     fun search(query: String?, status: String?, limit: Int): List<BillDto> {
-        val local = billRepository.search(query, status, limit)
+        val local = billRepository.searchWithSponsor(query, status, limit)
         if (local.isNotEmpty() || query.isNullOrBlank()) {
             return local.map { it.toDto() }
         }
 
         congressBackfillService?.backfill(query, limit)
-        return billRepository.search(query, status, limit).map { it.toDto() }
+        return billRepository.searchWithSponsor(query, status, limit).map { it.toDto() }
     }
 
     fun findActions(billId: UUID, limit: Int) = billRepository.findActions(billId, limit)

@@ -1,10 +1,13 @@
 package com.publicrecord.api.resources
 
 import com.publicrecord.api.services.PoliticianProfileService
+import com.publicrecord.api.services.PublicStatementService
+import com.publicrecord.api.services.VotingRecordService
 import org.slf4j.LoggerFactory
 import com.publicrecord.storage.repositories.PoliticianRepository
 import java.util.UUID
 import javax.ws.rs.*
+import javax.ws.rs.DefaultValue
 import javax.ws.rs.core.MediaType
 import javax.ws.rs.core.Response
 
@@ -12,7 +15,9 @@ import javax.ws.rs.core.Response
 @Produces(MediaType.APPLICATION_JSON)
 class PoliticianResource @JvmOverloads constructor(
     private val politicianRepository: PoliticianRepository,
-    private val politicianProfileService: PoliticianProfileService? = null
+    private val politicianProfileService: PoliticianProfileService? = null,
+    private val votingRecordService: VotingRecordService? = null,
+    private val publicStatementService: PublicStatementService? = null
 ) {
 
     private val logger = LoggerFactory.getLogger(PoliticianResource::class.java)
@@ -38,6 +43,40 @@ class PoliticianResource @JvmOverloads constructor(
         } catch (e: IllegalArgumentException) {
             Response.status(Response.Status.BAD_REQUEST)
                 .entity("Invalid UUID format").build()
+        }
+    }
+
+    @GET
+    @Path("/{id}/votes")
+    fun getVotingRecord(
+        @PathParam("id") id: String,
+        @QueryParam("limit") @DefaultValue("100") limit: Int
+    ): Response {
+        return try {
+            val service = votingRecordService
+                ?: return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+                    .entity("Voting record service is not configured")
+                    .build()
+            Response.ok(service.findByPoliticianId(UUID.fromString(id), limit.coerceIn(1, 250))).build()
+        } catch (e: IllegalArgumentException) {
+            Response.status(Response.Status.BAD_REQUEST).entity("Invalid UUID format").build()
+        }
+    }
+
+    @GET
+    @Path("/{id}/statements")
+    fun getStatements(
+        @PathParam("id") id: String,
+        @QueryParam("limit") @DefaultValue("100") limit: Int
+    ): Response {
+        return try {
+            val service = publicStatementService
+                ?: return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+                    .entity("Public statement service is not configured")
+                    .build()
+            Response.ok(service.findByPoliticianId(UUID.fromString(id), limit.coerceIn(1, 250))).build()
+        } catch (e: IllegalArgumentException) {
+            Response.status(Response.Status.BAD_REQUEST).entity("Invalid UUID format").build()
         }
     }
 

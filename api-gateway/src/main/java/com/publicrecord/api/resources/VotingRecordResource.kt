@@ -12,11 +12,11 @@ import javax.ws.rs.core.MediaType
 import javax.ws.rs.core.Response
 
 @Produces(MediaType.APPLICATION_JSON)
-@Path("/")
+@Path("")
 class VotingRecordResource(private val votingRecordService: VotingRecordService) {
 
     @GET
-    @Path("/politicians/{politicianId}/votes")
+    @Path("politicians/{politicianId}/votes")
     fun getVotesByPolitician(
         @PathParam("politicianId") politicianId: String,
         @QueryParam("limit") @DefaultValue("100") limit: Int
@@ -31,7 +31,7 @@ class VotingRecordResource(private val votingRecordService: VotingRecordService)
     }
 
     @GET
-    @Path("/bills/{billId}/votes")
+    @Path("bills/{billId}/votes")
     fun getVotesByBill(
         @PathParam("billId") billId: String,
         @QueryParam("limit") @DefaultValue("100") limit: Int

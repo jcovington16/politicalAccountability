@@ -201,6 +201,22 @@ button {
   line-height: 1.5;
 }
 
+.search-groups {
+  display: grid;
+  gap: 18px;
+}
+
+.search-group {
+  display: grid;
+  gap: 10px;
+}
+
+.search-group h3 {
+  margin: 0;
+  color: #314139;
+  font-size: 14px;
+}
+
 .profile-header {
   display: grid;
   grid-template-columns: 76px minmax(0, 1fr) auto;
@@ -222,6 +238,13 @@ button {
   border-radius: 50%;
   font-size: 24px;
   font-weight: 900;
+}
+
+.avatar.portrait {
+  display: block;
+  object-fit: cover;
+  object-position: center top;
+  background: #eef5f1;
 }
 
 .bill-avatar,
@@ -441,6 +464,28 @@ h1 {
 .card-list {
   display: grid;
   gap: 10px;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-chip {
+  padding: 7px 10px;
+  color: #34463d;
+  background: #ffffff;
+  border: 1px solid #d9e1dc;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.filter-chip.active {
+  color: #f8fbf8;
+  background: #13201b;
+  border-color: #13201b;
 }
 
 .mini-timeline div,

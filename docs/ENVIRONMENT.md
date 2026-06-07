@@ -24,6 +24,19 @@ Local development uses `.env` for scripts and service configuration. Do not comm
 | `OPENSTATES_SESSION` | Open States ingestion | Optional | unset | Restrict bill pulls to one legislative session. |
 | `OPENSTATES_LIMIT` | Open States ingestion | Optional | `25` | Max people/bills pulled per run. |
 | `GOOGLE_CIVIC_ADDRESS` | Google Civic ingestion | Optional | unset | Address used to fetch representative context. |
+| `GDELT_QUERIES` | Media ingestion | Optional | unset | Comma-separated public-media search queries. No API key required. |
+| `GDELT_MAX_RECORDS` | Media ingestion | Optional | `25` | Max GDELT article records per query. |
+| `RSS_FEEDS` | Media ingestion | Optional | unset | Comma-separated feed URLs. Use `url|Source Name` to label a feed. |
+| `GUARDIAN_API_KEY` | Media ingestion | Optional | unset | Server-side Guardian Open Platform API key. |
+| `GUARDIAN_QUERIES` | Media ingestion | Optional | unset | Comma-separated Guardian article search queries. |
+| `GUARDIAN_PAGE_SIZE` | Media ingestion | Optional | `10` | Max Guardian articles per query. |
+| `YOUTUBE_API_KEY` | Media ingestion | Optional | unset | Server-side YouTube Data API key. Required for YouTube ingestion only. |
+| `YOUTUBE_QUERIES` | Media ingestion | Optional | unset | Comma-separated public YouTube search queries. |
+| `YOUTUBE_CHANNEL_IDS` | Media ingestion | Optional | unset | Comma-separated official/public channel IDs to ingest from. |
+| `YOUTUBE_MAX_RESULTS` | Media ingestion | Optional | `10` | Max YouTube videos per query/channel per run. |
+| `NEWS_SCRAPER_ENABLED` | Media ingestion | Optional | `false` | Enables explicit public article URL scraping. Keep off unless sources are reviewed. |
+| `NEWS_SCRAPER_URLS` | Media ingestion | Optional | unset | Comma-separated `url|Source Name` article URLs. No bulk crawling. |
+| `NEWS_SCRAPER_MAX_PAGES` | Media ingestion | Optional | `10` | Max explicit article pages per run. |
 | `LIQUIBASE_IMAGE` | Liquibase scripts | Optional | `liquibase:4.33` | Docker fallback image. |
 | `LIQUIBASE_DOCKER_NETWORK` | Liquibase scripts | CI | unset | Use `host` in GitHub Actions service-container validation. |
 | `NVD_API_KEY` | CI security scan | Recommended | unset | Optional GitHub secret for OWASP Dependency-Check. Reduces NVD throttling and 403 failures. |

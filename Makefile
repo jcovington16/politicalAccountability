@@ -1,6 +1,6 @@
 # Political Accountability App - Development Makefile
 
-.PHONY: help build test clean run deploy health-check docker-build docker-run db-status db-migrate db-validate db-history db-rollback db-new db-tag ingest-local ingest-dry-run ingest-congress-bills ingest-congress-members ingest-govinfo-packages ingest-state-civic kafka-raw-log dashboard-install dashboard-dev dashboard-build mobile-install mobile-start mobile-typecheck
+.PHONY: help build test clean run deploy health-check docker-build docker-run db-status db-migrate db-validate db-history db-rollback db-new db-tag ingest-local ingest-dry-run ingest-congress-bills ingest-congress-members ingest-govinfo-packages ingest-state-civic ingest-media kafka-raw-log dashboard-install dashboard-dev dashboard-build mobile-install mobile-start mobile-typecheck
 
 # Default target
 help:
@@ -24,6 +24,7 @@ help:
 	@echo "  ingest-congress-members - Fetch Congress.gov member profiles"
 	@echo "  ingest-govinfo-packages - Fetch recent GovInfo official document events"
 	@echo "  ingest-state-civic - Fetch Open States and Google Civic records"
+	@echo "  ingest-media - Fetch public media discovery records from GDELT, RSS, and YouTube"
 	@echo "  kafka-raw-log - Print raw-content Kafka events"
 	@echo "  dashboard-dev  - Run React dashboard"
 	@echo "  dashboard-build - Build React dashboard"
@@ -211,6 +212,9 @@ ingest-official-normalized:
 
 ingest-state-civic:
 	@set -a; [ ! -f .env ] || . ./.env; set +a; ./gradlew :ingestion-service:runStateCivicIngestion
+
+ingest-media:
+	@set -a; [ ! -f .env ] || . ./.env; set +a; ./gradlew :ingestion-service:runMediaIngestion
 
 dashboard-install:
 	cd dashboard && npm install

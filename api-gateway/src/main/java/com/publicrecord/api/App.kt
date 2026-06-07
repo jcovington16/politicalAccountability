@@ -7,13 +7,27 @@ import com.publicrecord.api.resources.TimelineResource
 import com.publicrecord.api.resources.ContentItemResource
 import com.publicrecord.api.resources.NewsResource
 import com.publicrecord.api.resources.BillResource
+import com.publicrecord.api.resources.ClaimResource
+import com.publicrecord.api.resources.ClassificationResource
 import com.publicrecord.api.resources.AuditLogResource
 import com.publicrecord.api.resources.ImportResource
+import com.publicrecord.api.resources.IdentityResource
+import com.publicrecord.api.resources.PublicStatementResource
+import com.publicrecord.api.resources.ReviewResource
+import com.publicrecord.api.resources.SearchResource
+import com.publicrecord.api.resources.SourceResource
 import com.publicrecord.api.resources.TrustResource
-import com.publicrecord.api.resources.VotingRecordResource
 import com.publicrecord.api.services.BillService
+import com.publicrecord.api.services.ClaimService
 import com.publicrecord.api.services.CongressBillBackfillService
+import com.publicrecord.api.services.IdentityResolutionService
+import com.publicrecord.api.services.ProfileCompletenessService
 import com.publicrecord.api.services.PoliticianProfileService
+import com.publicrecord.api.services.PublicStatementService
+import com.publicrecord.api.services.ReviewQueueService
+import com.publicrecord.api.services.SearchService
+import com.publicrecord.api.services.SourceService
+import com.publicrecord.api.services.TimelineService
 import com.publicrecord.api.services.VotingRecordService
 import com.publicrecord.storage.services.DatabaseService
 import com.publicrecord.storage.services.ElasticSearchService
@@ -23,9 +37,13 @@ import com.publicrecord.storage.services.ProcessedContentSinkService
 import com.publicrecord.storage.config.DatabaseConfig
 import com.publicrecord.storage.repositories.BillRepository
 import com.publicrecord.storage.repositories.AuditLogRepository
+import com.publicrecord.storage.repositories.ClaimRepository
 import com.publicrecord.storage.repositories.ContentItemRepository
+import com.publicrecord.storage.repositories.ExternalIdentifierRepository
 import com.publicrecord.storage.repositories.ImportRepository
+import com.publicrecord.storage.repositories.OfficeElectionRepository
 import com.publicrecord.storage.repositories.PoliticianRepository
+import com.publicrecord.storage.repositories.PublicStatementRepository
 import com.publicrecord.storage.repositories.SourceCitationRepository
 import com.publicrecord.storage.repositories.VotingRecordRepository
 import com.publicrecord.storage.managed.DatabaseManagedService
@@ -73,7 +91,11 @@ class App : Application<AppConfig>() {
         val importRepository = ImportRepository(databaseConfig)
         val auditLogRepository = AuditLogRepository(databaseConfig)
         val sourceCitationRepository = SourceCitationRepository(databaseConfig)
+        val externalIdentifierRepository = ExternalIdentifierRepository(databaseConfig)
+        val claimRepository = ClaimRepository(databaseConfig)
         val votingRecordRepository = VotingRecordRepository(databaseConfig)
+        val officeElectionRepository = OfficeElectionRepository(databaseConfig)
+        val publicStatementRepository = PublicStatementRepository(databaseConfig)
         val billService = BillService(
             billRepository,
             sourceCitationRepository,
@@ -84,9 +106,34 @@ class App : Application<AppConfig>() {
             votingRecordRepository,
             billRepository,
             contentItemRepository,
-            sourceCitationRepository
+            sourceCitationRepository,
+            officeElectionRepository
         )
         val votingRecordService = VotingRecordService(votingRecordRepository)
+        val publicStatementService = PublicStatementService(publicStatementRepository)
+        val claimService = ClaimService(claimRepository)
+        val sourceService = SourceService(sourceCitationRepository)
+        val identityResolutionService = IdentityResolutionService(politicianRepository, externalIdentifierRepository)
+        val timelineService = TimelineService(
+            votingRecordRepository,
+            billRepository,
+            contentItemRepository,
+            publicStatementRepository,
+            claimRepository,
+            sourceCitationRepository,
+            officeElectionRepository
+        )
+        val searchService = SearchService(
+            politicianRepository,
+            billRepository,
+            claimRepository,
+            contentItemRepository,
+            publicStatementRepository,
+            sourceCitationRepository,
+            votingRecordRepository
+        )
+        val profileCompletenessService = ProfileCompletenessService(politicianProfileService, timelineService)
+        val reviewQueueService = ReviewQueueService(claimRepository, contentItemRepository, publicStatementRepository)
         val processedContentSinkService = ProcessedContentSinkService(
             kafkaBootstrapServers = config.kafkaBootstrapServers,
             contentItemRepository = contentItemRepository
@@ -103,14 +150,20 @@ class App : Application<AppConfig>() {
         env.jersey().register(AdminAuthorizationFilter(config.adminApiToken))
 
         // Register API resources
-        env.jersey().register(PoliticianResource(politicianRepository, politicianProfileService))
-        env.jersey().register(TimelineResource(contentItemRepository))
+        env.jersey().register(PoliticianResource(politicianRepository, politicianProfileService, votingRecordService, publicStatementService))
+        env.jersey().register(TimelineResource(contentItemRepository, timelineService))
         env.jersey().register(ContentItemResource(contentItemRepository))
         env.jersey().register(NewsResource())
-        env.jersey().register(BillResource(billService))
+        env.jersey().register(BillResource(billService, votingRecordService))
+        env.jersey().register(ClaimResource(claimService))
         env.jersey().register(ImportResource(importRepository))
         env.jersey().register(AuditLogResource(auditLogRepository))
-        env.jersey().register(VotingRecordResource(votingRecordService))
+        env.jersey().register(PublicStatementResource(publicStatementService))
+        env.jersey().register(SourceResource(sourceService))
+        env.jersey().register(IdentityResource(identityResolutionService))
+        env.jersey().register(SearchResource(searchService))
+        env.jersey().register(ReviewResource(reviewQueueService, profileCompletenessService))
+        env.jersey().register(ClassificationResource())
         env.jersey().register(TrustResource())
 
         logger.info("✅ Dropwizard API Gateway started successfully!")

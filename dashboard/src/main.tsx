@@ -15,7 +15,7 @@ import {
   UserRound,
   Vote,
 } from 'lucide-react';
-import { searchBills as searchBillsApi, searchPoliticians } from './api';
+import { getBillDetail, getPoliticianClaims, getPoliticianProfile, getPoliticianTimeline, getPublicStatements, globalSearch, searchBills as searchBillsApi, searchPoliticians } from './api';
 import {
   accomplishments,
   controversies,
@@ -28,7 +28,7 @@ import {
   securityControls,
   timeline,
 } from './mockData';
-import type { Bill, BillVote, Politician, SecurityControl } from './types';
+import type { Bill, BillDetail as BillDetailData, BillVote, ClaimRecord, Politician, PoliticianProfile, PublicStatement, SearchResponse, SecurityControl, TimelineAggregate, VotingRecord } from './types';
 import './styles.css';
 
 type View = 'search' | 'bills' | 'saved' | 'profile' | 'billDetail';
@@ -52,9 +52,16 @@ function App() {
   const [query, setQuery] = useState('');
   const [billQuery, setBillQuery] = useState('');
   const [selected, setSelected] = useState<Politician>(samplePoliticians[0]);
+  const [selectedProfile, setSelectedProfile] = useState<PoliticianProfile | null>(null);
+  const [profileState, setProfileState] = useState('Using sample profile data');
   const [selectedBill, setSelectedBill] = useState<Bill>(sampleBills[0]);
+  const [selectedBillDetail, setSelectedBillDetail] = useState<BillDetailData | null>(null);
+  const [publicStatements, setPublicStatements] = useState<PublicStatement[]>([]);
+  const [claims, setClaims] = useState<ClaimRecord[]>([]);
+  const [timelineAggregate, setTimelineAggregate] = useState<TimelineAggregate | null>(null);
   const [savedIds, setSavedIds] = useState<string[]>([samplePoliticians[0].id]);
   const [results, setResults] = useState<Politician[]>(samplePoliticians);
+  const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null);
   const [billResults, setBillResults] = useState<Bill[]>(sampleBills);
   const [apiState, setApiState] = useState('Using sample dashboard data');
   const [billApiState, setBillApiState] = useState('Using sample dashboard bill data');
@@ -66,6 +73,7 @@ function App() {
 
     if (!trimmed) {
       setResults(samplePoliticians);
+      setSearchResponse(null);
       setApiState('Using sample dashboard data');
       return;
     }
@@ -99,6 +107,7 @@ function App() {
     const trimmed = searchTerm.trim();
     if (!trimmed) {
       setResults(samplePoliticians);
+      setSearchResponse(null);
       setApiState('Using sample dashboard data');
       setView('search');
       return;
@@ -107,8 +116,12 @@ function App() {
     setApiState('Searching live politician data...');
 
     try {
-      const found = await searchPoliticians(searchTerm);
+      const [found, grouped] = await Promise.all([
+        searchPoliticians(searchTerm),
+        globalSearch(searchTerm),
+      ]);
       if (searchId !== latestPoliticianSearch.current) return;
+      setSearchResponse(grouped);
       if (found.length > 0) {
         setResults(found);
         setSelected(found[0]);
@@ -125,24 +138,79 @@ function App() {
       if (searchId !== latestPoliticianSearch.current) return;
       const local = filterSamplePoliticians(searchTerm);
       setResults(local);
+      setSearchResponse(null);
       if (local[0]) setSelected(local[0]);
       setApiState('API unavailable, filtered sample data');
       setView('search');
     }
   }
 
-  const supported = sampleVotes.filter((vote) => vote.voteType === 'YEA');
-  const opposed = sampleVotes.filter((vote) => vote.voteType === 'NAY');
+  const visibleVotes = selectedProfile?.votingRecords.length ? selectedProfile.votingRecords : sampleVotes;
+  const supported = visibleVotes.filter((vote) => vote.voteType === 'YEA');
+  const opposed = visibleVotes.filter((vote) => vote.voteType === 'NAY');
 
   function openPolitician(politician: Politician) {
     setSelected(politician);
+    setSelectedProfile(null);
+    setClaims([]);
+    setPublicStatements([]);
+    setTimelineAggregate(null);
+    setProfileState('Loading live profile...');
     setActiveTab('Overview');
     setView('profile');
+    void getPoliticianProfile(politician.id)
+      .then((profile) => {
+        setSelectedProfile(profile);
+        setSelected(profile.politician);
+        setProfileState('Connected to API profile');
+      })
+      .catch(() => {
+        setProfileState('API profile unavailable, showing sample profile data');
+      });
+    void getPublicStatements(politician.id)
+      .then(setPublicStatements)
+      .catch(() => setPublicStatements([]));
+    void getPoliticianClaims(politician.id)
+      .then(setClaims)
+      .catch(() => setClaims([]));
+    void getPoliticianTimeline(politician.id)
+      .then(setTimelineAggregate)
+      .catch(() => setTimelineAggregate(null));
   }
 
   function openBill(bill: Bill) {
     setSelectedBill(bill);
+    setSelectedBillDetail(null);
     setView('billDetail');
+    void getBillDetail(bill.id)
+      .then((detail) => {
+        setSelectedBill(detail.bill);
+        setSelectedBillDetail(detail);
+      })
+      .catch(() => setSelectedBillDetail(null));
+  }
+
+  function openBillById(id: string) {
+    const known = billResults.find((bill) => bill.id === id) || sampleBills.find((bill) => bill.id === id);
+    if (known) {
+      openBill(known);
+      return;
+    }
+    setSelectedBill({
+      id,
+      billNumber: 'Loading',
+      title: 'Loading bill detail...',
+      status: 'Pending',
+      introducedDate: new Date().toISOString().slice(0, 10),
+    });
+    setSelectedBillDetail(null);
+    setView('billDetail');
+    void getBillDetail(id)
+      .then((detail) => {
+        setSelectedBill(detail.bill);
+        setSelectedBillDetail(detail);
+      })
+      .catch(() => setSelectedBillDetail(null));
   }
 
   function toggleSaved(id: string) {
@@ -305,20 +373,20 @@ function App() {
       </aside>
 
       <main className="content">
-        {view === 'search' && <SearchLanding results={results} onOpenPolitician={openPolitician} />}
+        {view === 'search' && <SearchLanding results={results} searchResponse={searchResponse} onOpenPolitician={openPolitician} onOpenBillById={openBillById} />}
         {view === 'saved' && <SavedPoliticians savedIds={savedIds} onOpenPolitician={openPolitician} />}
         {view === 'bills' && <BillSearchLanding bills={billResults} onOpenBill={openBill} />}
-        {view === 'billDetail' && <BillDetail bill={selectedBill} onBack={() => setView('bills')} onOpenPolitician={openPolitician} />}
+        {view === 'billDetail' && <BillDetail bill={selectedBill} detail={selectedBillDetail} onBack={() => setView('bills')} onOpenPolitician={openPolitician} />}
         {view === 'profile' && (
           <>
-            <Header politician={selected} saved={savedIds.includes(selected.id)} onToggleSaved={() => toggleSaved(selected.id)} />
-            {activeTab === 'Overview' && <Overview politician={selected} />}
-            {activeTab === 'Votes' && <Votes supportedCount={supported.length} opposedCount={opposed.length} onOpenBill={openBill} />}
-            {activeTab === 'Bills' && <Bills onOpenBill={openBill} />}
-            {activeTab === 'Statements' && <Statements />}
-            {activeTab === 'Controversies' && <Controversies />}
-            {activeTab === 'Citations' && <Citations />}
-            {activeTab === 'Timeline' && <Timeline />}
+            <Header politician={selected} profile={selectedProfile} profileState={profileState} saved={savedIds.includes(selected.id)} onToggleSaved={() => toggleSaved(selected.id)} />
+            {activeTab === 'Overview' && <Overview politician={selected} profile={selectedProfile} />}
+            {activeTab === 'Votes' && <Votes votes={visibleVotes} supportedCount={supported.length} opposedCount={opposed.length} onOpenBill={openBill} />}
+            {activeTab === 'Bills' && <Bills profile={selectedProfile} onOpenBill={openBill} />}
+            {activeTab === 'Statements' && <Statements statements={publicStatements} />}
+            {activeTab === 'Controversies' && <Controversies claims={claims} />}
+            {activeTab === 'Citations' && <Citations profile={selectedProfile} />}
+            {activeTab === 'Timeline' && <Timeline aggregate={timelineAggregate} />}
             {activeTab === 'Security' && <SecurityArchitecture />}
           </>
         )}
@@ -347,23 +415,45 @@ function filterSampleBills(query: string): Bill[] {
   );
 }
 
-function Header({ politician, saved, onToggleSaved }: { politician: Politician; saved: boolean; onToggleSaved: () => void }) {
+function Header({
+  politician,
+  profile,
+  profileState,
+  saved,
+  onToggleSaved,
+}: {
+  politician: Politician;
+  profile: PoliticianProfile | null;
+  profileState: string;
+  saved: boolean;
+  onToggleSaved: () => void;
+}) {
+  const trust = profile?.trustSummary;
   return (
     <section className="profile-header">
-      <div className="avatar" aria-hidden="true">
-        {politician.firstName[0]}{politician.lastName[0]}
-      </div>
+      {politician.profileImageUrl ? (
+        <img
+          className="avatar portrait"
+          src={politician.profileImageUrl}
+          alt={`${politician.firstName} ${politician.lastName}`}
+        />
+      ) : (
+        <div className="avatar" aria-hidden="true">
+          {politician.firstName[0]}{politician.lastName[0]}
+        </div>
+      )}
       <div>
         <div className="eyebrow">{politician.party} · {politician.state}</div>
         <h1>{politician.firstName} {politician.lastName}</h1>
         <p>{politician.office}</p>
       </div>
       <div className="header-metrics">
-        <Metric label="Trust avg" value="82%" tone="good" />
-        <Metric label="Citations" value="41" />
-        <Metric label="Open risks" value="3" tone="warn" />
+        <Metric label="Trust avg" value={trust ? `${Math.round(trust.averageScore * 100)}%` : '82%'} tone="good" />
+        <Metric label="Citations" value={String(trust?.citationCount ?? 41)} />
+        <Metric label="Open risks" value={String(trust?.openRiskCount ?? 3)} tone="warn" />
         <button type="button" className="primary-action" onClick={onToggleSaved}>{saved ? 'Saved' : 'Save'}</button>
       </div>
+      <p className="profile-state">{profileState}</p>
     </section>
   );
 }
@@ -377,7 +467,18 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: '
   );
 }
 
-function SearchLanding({ results, onOpenPolitician }: { results: Politician[]; onOpenPolitician: (politician: Politician) => void }) {
+function SearchLanding({
+  results,
+  searchResponse,
+  onOpenPolitician,
+  onOpenBillById,
+}: {
+  results: Politician[];
+  searchResponse: SearchResponse | null;
+  onOpenPolitician: (politician: Politician) => void;
+  onOpenBillById: (id: string) => void;
+}) {
+  const grouped = searchResponse?.groups.filter((group) => group.results.length > 0) ?? [];
   return (
     <section className="stack">
       <div className="hero-panel">
@@ -385,6 +486,43 @@ function SearchLanding({ results, onOpenPolitician }: { results: Politician[]; o
         <h1>Search who represents you.</h1>
         <p>Find state and federal politicians, then review what they voted for, sponsored, said, and had reported about them.</p>
       </div>
+      {grouped.length > 0 && (
+        <Panel title={`Live Search Results (${searchResponse?.total ?? 0})`} icon={<Search size={18} />}>
+          <div className="search-groups">
+            {grouped.map((group) => (
+              <section key={group.type} className="search-group">
+                <h3>{group.label}</h3>
+                <div className="card-list">
+                  {group.results.map((result) => {
+                    const politician = group.type === 'politicians' ? results.find((item) => item.id === result.id) : undefined;
+                    const canOpenBill = group.type === 'bills';
+                    return (
+                      <button
+                        key={`${group.type}-${result.id}`}
+                        type="button"
+                        className="record-card"
+                        onClick={() => {
+                          if (politician) onOpenPolitician(politician);
+                          if (canOpenBill) onOpenBillById(result.id);
+                        }}
+                      >
+                        <span className="small-avatar">{group.type.slice(0, 3).toUpperCase()}</span>
+                        <div>
+                          <strong>{result.title}</strong>
+                          <small>{[result.subtitle, result.source, result.date && formatDisplayDate(result.date)].filter(Boolean).join(' · ')}</small>
+                          {result.description && <p>{result.description.slice(0, 180)}</p>}
+                          {result.trustContext && <small>{result.trustContext}</small>}
+                          {result.reviewWarnings.length > 0 && <small>{result.reviewWarnings.join(' ')}</small>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        </Panel>
+      )}
       <Panel title="Politicians" icon={<UserRound size={18} />}>
         <div className="card-list">
           {results.map((politician) => (
@@ -438,7 +576,16 @@ function BillSearchLanding({ bills, onOpenBill }: { bills: Bill[]; onOpenBill: (
   );
 }
 
-function Overview({ politician }: { politician: Politician }) {
+function Overview({ politician, profile }: { politician: Politician; profile: PoliticianProfile | null }) {
+  const office = profile?.offices[0];
+  const recentActivity = profile?.timeline.length
+    ? profile.timeline.slice(0, 4).map((item, index) => ({
+      id: `${item.date}-${item.title}-${index}`,
+      date: item.date,
+      title: item.title,
+      category: item.category,
+    }))
+    : timeline.slice(0, 4);
   return (
     <section className="grid two">
       <Panel title="Biography" icon={<UserRound size={18} />}>
@@ -446,8 +593,10 @@ function Overview({ politician }: { politician: Politician }) {
         <div className="fact-grid">
           <Fact label="Office" value={politician.office} />
           <Fact label="State" value={politician.state} />
-          <Fact label="Term start" value={politician.startDate} />
+          <Fact label="Term start" value={formatDisplayDate(politician.startDate)} />
           <Fact label="Current party" value={politician.party} />
+          {office && <Fact label="Seat" value={office.seatIdentifier} />}
+          {profile?.elections[0] && <Fact label="Next election" value={`${profile.elections[0].electionType} ${profile.elections[0].cycleYear}`} />}
         </div>
       </Panel>
 
@@ -468,9 +617,9 @@ function Overview({ politician }: { politician: Politician }) {
 
       <Panel title="Recent Activity" icon={<CalendarClock size={18} />}>
         <div className="mini-timeline">
-          {timeline.slice(0, 4).map((item) => (
+          {recentActivity.map((item) => (
             <div key={item.id}>
-              <time>{item.date}</time>
+              <time>{formatDisplayDate(item.date)}</time>
               <strong>{item.title}</strong>
               <span>{item.category}</span>
             </div>
@@ -481,7 +630,17 @@ function Overview({ politician }: { politician: Politician }) {
   );
 }
 
-function Votes({ supportedCount, opposedCount, onOpenBill }: { supportedCount: number; opposedCount: number; onOpenBill: (bill: Bill) => void }) {
+function Votes({
+  votes,
+  supportedCount,
+  opposedCount,
+  onOpenBill,
+}: {
+  votes: VotingRecord[];
+  supportedCount: number;
+  opposedCount: number;
+  onOpenBill: (bill: Bill) => void;
+}) {
   return (
     <section className="stack">
       <div className="summary-strip">
@@ -491,8 +650,15 @@ function Votes({ supportedCount, opposedCount, onOpenBill }: { supportedCount: n
       </div>
       <Panel title="Voting Record" icon={<Vote size={18} />}>
         <div className="card-list">
-          {sampleVotes.map((vote) => {
-            const bill = sampleBills.find((item) => item.id === vote.billId);
+          {votes.map((vote) => {
+            const bill = sampleBills.find((item) => item.id === vote.billId) ?? {
+              id: vote.billId,
+              billNumber: vote.billNumber ?? 'Unknown',
+              title: vote.billTitle ?? 'Unknown bill',
+              status: 'Pending' as const,
+              introducedDate: vote.voteDate,
+              billUrl: vote.billUrl,
+            };
             return (
               <button key={vote.id} type="button" className="vote-card" onClick={() => bill && onOpenBill(bill)}>
                 <time>{vote.voteDate}</time>
@@ -508,11 +674,12 @@ function Votes({ supportedCount, opposedCount, onOpenBill }: { supportedCount: n
   );
 }
 
-function Bills({ onOpenBill }: { onOpenBill: (bill: Bill) => void }) {
+function Bills({ profile, onOpenBill }: { profile: PoliticianProfile | null; onOpenBill: (bill: Bill) => void }) {
   const grouped = useMemo(() => ({
-    supported: sampleBills.filter((bill) => sampleVotes.some((vote) => vote.billId === bill.id && vote.voteType === 'YEA')),
-    opposed: sampleBills.filter((bill) => sampleVotes.some((vote) => vote.billId === bill.id && vote.voteType === 'NAY')),
-  }), []);
+    supported: profile?.billsSupported.length ? profile.billsSupported : sampleBills.filter((bill) => sampleVotes.some((vote) => vote.billId === bill.id && vote.voteType === 'YEA')),
+    opposed: profile?.billsOpposed.length ? profile.billsOpposed : sampleBills.filter((bill) => sampleVotes.some((vote) => vote.billId === bill.id && vote.voteType === 'NAY')),
+    sponsored: profile?.billsSponsored ?? [],
+  }), [profile]);
 
   return (
     <section className="grid two">
@@ -522,6 +689,11 @@ function Bills({ onOpenBill }: { onOpenBill: (bill: Bill) => void }) {
       <Panel title="Bills Opposed" icon={<BookOpen size={18} />}>
         <BillList bills={grouped.opposed} onOpenBill={onOpenBill} />
       </Panel>
+      {grouped.sponsored.length > 0 && (
+        <Panel title="Bills Sponsored" icon={<BookOpen size={18} />}>
+          <BillList bills={grouped.sponsored} onOpenBill={onOpenBill} />
+        </Panel>
+      )}
     </section>
   );
 }
@@ -537,7 +709,7 @@ function BillList({ bills, onOpenBill }: { bills: Bill[]; onOpenBill: (bill: Bil
           </div>
           <h3>{bill.title}</h3>
           <p>{bill.description}</p>
-          <small>Introduced {bill.introducedDate} · Sponsor: {bill.sponsor ?? 'Unknown'}</small>
+          <small>Introduced {formatDisplayDate(bill.introducedDate)} · Sponsor: {bill.sponsor ?? 'Unknown'}</small>
         </button>
       ))}
     </div>
@@ -546,17 +718,30 @@ function BillList({ bills, onOpenBill }: { bills: Bill[]; onOpenBill: (bill: Bil
 
 function BillDetail({
   bill,
+  detail,
   onBack,
   onOpenPolitician,
 }: {
   bill: Bill;
+  detail: BillDetailData | null;
   onBack: () => void;
   onOpenPolitician: (politician: Politician) => void;
 }) {
-  const votes = sampleBillVotes[bill.id] ?? [];
+  const votes = detail?.votes.length
+    ? detail.votes.map((vote) => ({
+      id: vote.id,
+      politicianId: vote.politicianId,
+      politicianName: vote.politicianName ?? 'Unknown politician',
+      party: vote.party ?? 'Unknown',
+      state: vote.state ?? 'Unknown',
+      voteType: vote.voteType,
+      voteDate: formatDisplayDate(vote.voteDate),
+    }))
+    : sampleBillVotes[bill.id] ?? [];
   const yea = votes.filter((vote) => vote.voteType === 'YEA');
   const nay = votes.filter((vote) => vote.voteType === 'NAY');
   const abstain = votes.filter((vote) => vote.voteType === 'ABSTAIN');
+  const sponsorNames = detail?.sponsors.map((sponsor) => sponsor.politicianName).join(', ') || bill.sponsor;
 
   return (
     <section className="stack">
@@ -580,15 +765,52 @@ function BillDetail({
           <p className="body-copy">{bill.description}</p>
           <div className="fact-grid">
             <Fact label="Status" value={bill.status} />
-            <Fact label="Sponsor" value={bill.sponsor} />
-            <Fact label="Introduced" value={bill.introducedDate} />
-            <Fact label="Last action" value={bill.lastActionDate} />
+            <Fact label="Sponsor" value={sponsorNames} />
+            <Fact label="Introduced" value={formatDisplayDate(bill.introducedDate)} />
+            <Fact label="Last action" value={formatDisplayDate(bill.lastActionDate)} />
           </div>
         </Panel>
         <Panel title="Source" icon={<Link size={18} />}>
           <p className="body-copy">{bill.billUrl ?? 'Official source URL will appear here after API ingestion is normalized.'}</p>
         </Panel>
       </section>
+
+      {detail && (
+        <section className="grid two">
+          <Panel title="Sponsors" icon={<UserRound size={18} />}>
+            <SponsorList sponsors={detail.sponsors} emptyText="No primary sponsor recorded." />
+          </Panel>
+          <Panel title="Cosponsors" icon={<UserRound size={18} />}>
+            <SponsorList sponsors={detail.cosponsors} emptyText="No cosponsors recorded." />
+          </Panel>
+          <Panel title="Bill Actions" icon={<CalendarClock size={18} />}>
+            <div className="mini-timeline">
+              {detail.actions.map((action) => (
+                <div key={action.id}>
+                  <time>{formatDisplayDate(action.actionDate)}</time>
+                  <strong>{action.actionText}</strong>
+                  <span>Official action</span>
+                </div>
+              ))}
+              {detail.actions.length === 0 && <p className="body-copy">No official actions recorded.</p>}
+            </div>
+          </Panel>
+          <Panel title="Citations" icon={<Link size={18} />}>
+            <div className="card-list">
+              {detail.citations.map((citation) => (
+                <a key={citation.id} className="record-card" href={citation.url} target="_blank" rel="noreferrer">
+                  <span className="small-avatar">SRC</span>
+                  <div>
+                    <strong>{citation.title ?? citation.sourceName ?? 'Official source'}</strong>
+                    <small>{citation.sourceQuality}</small>
+                  </div>
+                </a>
+              ))}
+              {detail.citations.length === 0 && <p className="body-copy">No citations recorded.</p>}
+            </div>
+          </Panel>
+        </section>
+      )}
 
       <section className="grid two">
         <Panel title="Votes For" icon={<Vote size={18} />}>
@@ -599,6 +821,23 @@ function BillDetail({
         </Panel>
       </section>
     </section>
+  );
+}
+
+function SponsorList({ sponsors, emptyText }: { sponsors: BillDetailData['sponsors']; emptyText: string }) {
+  return (
+    <div className="card-list">
+      {sponsors.map((sponsor) => (
+        <div key={sponsor.id} className="record-card">
+          <span className="small-avatar">{sponsor.politicianName.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span>
+          <div>
+            <strong>{sponsor.politicianName}</strong>
+            <small>{sponsor.sponsorType} · {sponsor.party ?? 'Unknown party'} · {sponsor.state ?? 'Unknown state'}</small>
+          </div>
+        </div>
+      ))}
+      {sponsors.length === 0 && <p className="body-copy">{emptyText}</p>}
+    </div>
   );
 }
 
@@ -622,7 +861,31 @@ function BillVoteList({ votes, onOpenPolitician }: { votes: BillVote[]; onOpenPo
   );
 }
 
-function Statements() {
+function Statements({ statements }: { statements: PublicStatement[] }) {
+  if (statements.length > 0) {
+    return (
+      <section className="stack">
+        {statements.map((statement) => (
+          <Panel key={statement.id} title={statement.title} icon={<Newspaper size={18} />}>
+            <div className="statement">
+              <div>
+                <span>{statement.statementType.replace(/_/g, ' ')}</span>
+                <time>{formatDisplayDate(statement.statementDate)}</time>
+              </div>
+              <blockquote>{statement.quote ?? statement.body ?? 'No statement text recorded.'}</blockquote>
+              <div className="risk-row">
+                <span className={`risk ${statement.suspiciousContent ? 'high' : 'low'}`}>
+                  {statement.suspiciousContent ? 'Needs review' : 'Publishable'}
+                </span>
+                <span>{statement.venue ?? 'Unknown venue'}</span>
+              </div>
+            </div>
+          </Panel>
+        ))}
+      </section>
+    );
+  }
+
   return (
     <section className="stack">
       {sampleStatements.map((statement) => (
@@ -637,11 +900,46 @@ function Statements() {
           </div>
         </Panel>
       ))}
+      <p className="body-copy">Showing sample statements until public statement records are imported for this politician.</p>
     </section>
   );
 }
 
-function Controversies() {
+function Controversies({ claims }: { claims: ClaimRecord[] }) {
+  if (claims.length > 0) {
+    return (
+      <section className="grid two">
+        {claims.map((claim) => (
+          <Panel key={claim.id} title={claim.claimType.replace(/_/g, ' ')} icon={<AlertTriangle size={18} />}>
+            <div className="risk-row">
+              <span className={`risk ${claim.publishable ? 'medium' : 'high'}`}>
+                {claim.status}
+              </span>
+              <span>{claim.trust.confidenceLevel} confidence · {claim.citationCount} citation{claim.citationCount === 1 ? '' : 's'}</span>
+            </div>
+            <p className="body-copy">{claim.claimText}</p>
+            {claim.reviewWarnings.length > 0 && (
+              <ul className="clean-list">
+                {claim.reviewWarnings.map((warning) => <li key={warning}>{warning}</li>)}
+              </ul>
+            )}
+            {claim.factChecks.length > 0 && (
+              <div className="mini-timeline">
+                {claim.factChecks.map((factCheck) => (
+                  <div key={factCheck.id}>
+                    <time>{formatDisplayDate(factCheck.checkedAt)}</time>
+                    <strong>{factCheck.rating}</strong>
+                    <span>{factCheck.summary}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Panel>
+        ))}
+      </section>
+    );
+  }
+
   return (
     <section className="grid two">
       {controversies.map((item) => (
@@ -653,11 +951,30 @@ function Controversies() {
           <p className="body-copy">{item.summary}</p>
         </Panel>
       ))}
+      <p className="body-copy">Showing sample controversies until claim records are imported for this politician.</p>
     </section>
   );
 }
 
-function Citations() {
+function Citations({ profile }: { profile: PoliticianProfile | null }) {
+  const liveCitations = profile?.citations ?? [];
+
+  if (liveCitations.length > 0) {
+    return (
+      <Panel title="Source Citations" icon={<Link size={18} />}>
+        <DataTable
+          columns={['Date', 'Source', 'Quality', 'Used for']}
+          rows={liveCitations.map((citation) => [
+            formatDisplayDate(citation.publishedAt ?? citation.retrievedAt),
+            citation.sourceName ?? 'Unknown source',
+            citation.sourceQuality ?? 'UNKNOWN',
+            citation.citationType ?? 'Evidence',
+          ])}
+        />
+      </Panel>
+    );
+  }
+
   return (
     <Panel title="Source Citations" icon={<Link size={18} />}>
       <DataTable
@@ -669,11 +986,65 @@ function Citations() {
           citation.citedBy,
         ])}
       />
+      <p className="body-copy">Showing sample citations until live source citations are attached to this profile.</p>
     </Panel>
   );
 }
 
-function Timeline() {
+function Timeline({ aggregate }: { aggregate: TimelineAggregate | null }) {
+  const [activeCategory, setActiveCategory] = useState('All');
+  const categories = aggregate ? ['All', ...Object.keys(aggregate.stats.byCategory)] : ['All'];
+  const visibleItems = aggregate
+    ? aggregate.items.filter((item) => activeCategory === 'All' || item.category === activeCategory)
+    : [];
+
+  if (aggregate && aggregate.items.length > 0) {
+    return (
+      <Panel title="Timeline of Activity" icon={<CalendarClock size={18} />}>
+        <div className="metric-row">
+          <Metric label="Events" value={String(aggregate.stats.total)} />
+          <Metric label="Publishable" value={String(aggregate.stats.publishableCount)} />
+          <Metric label="Needs review" value={String(aggregate.stats.reviewRequiredCount)} />
+        </div>
+        <div className="filter-row" aria-label="Timeline filters">
+          {categories.map((category) => (
+            <button
+              key={category}
+              type="button"
+              className={activeCategory === category ? 'filter-chip active' : 'filter-chip'}
+              onClick={() => setActiveCategory(category)}
+            >
+              {category}
+            </button>
+          ))}
+        </div>
+        <div className="timeline">
+          {visibleItems.map((item) => (
+            <article key={item.id}>
+              <time>{formatDisplayDate(item.date)}</time>
+              <div>
+                <span>{item.category} · {item.evidenceType.replace(/_/g, ' ')}</span>
+                <h3>{item.title}</h3>
+                <p>{item.description}</p>
+                {item.sourceUrl && (
+                  <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceName ?? 'Source'}</a>
+                )}
+                {item.warnings.length > 0 && (
+                  <ul className="clean-list">
+                    {item.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+                  </ul>
+                )}
+              </div>
+              <span className={`risk ${item.publishable ? 'low' : 'high'}`}>
+                {item.publishable ? 'Publishable' : 'Review'}
+              </span>
+            </article>
+          ))}
+        </div>
+      </Panel>
+    );
+  }
+
   return (
     <Panel title="Timeline of Activity" icon={<CalendarClock size={18} />}>
       <div className="timeline">
@@ -689,6 +1060,7 @@ function Timeline() {
           </article>
         ))}
       </div>
+      <p className="body-copy">Showing sample timeline until live votes, bills, statements, claims, media, or office records are available.</p>
     </Panel>
   );
 }
@@ -745,6 +1117,30 @@ function Fact({ label, value }: { label: string; value?: string }) {
       <span>{label}</span>
       <strong>{value || 'Unknown'}</strong>
     </div>
+  );
+}
+
+function formatDisplayDate(value?: string | [number, number, number]): string {
+  if (!value) return 'Unknown';
+
+  if (Array.isArray(value)) {
+    const [year, month, day] = value;
+    return formatDateParts(year, month, day);
+  }
+
+  const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return formatDateParts(Number(isoMatch[1]), Number(isoMatch[2]), Number(isoMatch[3]));
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed);
+}
+
+function formatDateParts(year: number, month: number, day: number): string {
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(
+    new Date(Date.UTC(year, month - 1, day, 12)),
   );
 }
 

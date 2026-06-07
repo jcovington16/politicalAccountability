@@ -1,6 +1,7 @@
 package com.publicrecord.api.resources
 
 import org.slf4j.LoggerFactory
+import com.publicrecord.api.services.TimelineService
 import com.publicrecord.storage.repositories.ContentItemRepository
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -14,8 +15,9 @@ import javax.ws.rs.core.Response
  */
 @Path("/politicians/{politicianId}/timeline")
 @Produces(MediaType.APPLICATION_JSON)
-class TimelineResource(
-    private val contentItemRepository: ContentItemRepository
+class TimelineResource @JvmOverloads constructor(
+    private val contentItemRepository: ContentItemRepository,
+    private val timelineService: TimelineService? = null
 ) {
 
     private val logger = LoggerFactory.getLogger(TimelineResource::class.java)
@@ -28,11 +30,15 @@ class TimelineResource(
     fun getTimeline(
         @PathParam("politicianId") politicianId: String,
         @QueryParam("limit") @DefaultValue("50") limit: Int,
-        @QueryParam("offset") @DefaultValue("0") offset: Int
+        @QueryParam("offset") @DefaultValue("0") offset: Int,
+        @QueryParam("category") category: String?
     ): Response {
         logger.info("Fetching timeline for politician: $politicianId (limit=$limit, offset=$offset)")
 
         return try {
+            if (timelineService != null && offset == 0) {
+                return Response.ok(timelineService.aggregate(UUID.fromString(politicianId), category, limit)).build()
+            }
             val contentItems = contentItemRepository.findByPoliticianId(
                 UUID.fromString(politicianId),
                 limit,

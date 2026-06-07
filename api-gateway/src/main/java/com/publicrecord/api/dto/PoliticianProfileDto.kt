@@ -2,15 +2,20 @@ package com.publicrecord.api.dto
 
 import com.publicrecord.common.models.Bill
 import com.publicrecord.common.models.ContentItem
+import com.publicrecord.common.models.ElectionHistoryItem
+import com.publicrecord.common.models.OfficeHistoryItem
 import com.publicrecord.common.models.Politician
 import com.publicrecord.common.models.SourceCitation
-import com.publicrecord.common.models.VotingRecord
+import com.publicrecord.common.trust.TrustScore
 import java.time.LocalDate
 import java.time.LocalDateTime
 
 data class PoliticianProfileDto(
     val politician: Politician,
-    val votingRecords: List<VotingRecord>,
+    val offices: List<OfficeHistoryItem>,
+    val elections: List<ElectionHistoryItem>,
+    val trustSummary: ProfileTrustSummaryDto,
+    val votingRecords: List<VotingRecordDto>,
     val votedBills: List<ProfileBillVoteDto>,
     val billsSupported: List<Bill>,
     val billsOpposed: List<Bill>,
@@ -32,4 +37,11 @@ data class ProfileTimelineItemDto(
     val title: String,
     val description: String?,
     val sourceUrl: String?
+)
+
+data class ProfileTrustSummaryDto(
+    val averageScore: Double,
+    val citationCount: Int,
+    val openRiskCount: Int,
+    val records: List<TrustScore>
 )

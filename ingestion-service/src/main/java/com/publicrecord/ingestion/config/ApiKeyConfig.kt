@@ -11,7 +11,10 @@ data class ApiKeyConfig(
     val fecApiKey: String? = env("FEC_API_KEY"),
     val googleCivicApiKey: String? = env("GOOGLE_CIVIC_API_KEY"),
     val courtListenerApiKey: String? = env("COURTLISTENER_API_KEY"),
-    val newsApiKey: String? = env("NEWSAPI_API_KEY")
+    val newsApiKey: String? = env("NEWSAPI_API_KEY"),
+    val guardianApiKey: String? = env("GUARDIAN_API_KEY"),
+    val youtubeApiKey: String? = env("YOUTUBE_API_KEY"),
+    val xBearerToken: String? = env("X_BEARER_TOKEN")
 ) {
     fun requireCongressApiKey(): String {
         return congressApiKey ?: error("CONGRESS_API_KEY is required for Congress.gov ingestion")

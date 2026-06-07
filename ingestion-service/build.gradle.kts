@@ -83,3 +83,10 @@ tasks.register<JavaExec>("runStateCivicIngestion") {
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.publicrecord.ingestion.StateCivicIngestionMainKt")
 }
+
+tasks.register<JavaExec>("runMediaIngestion") {
+    group = "application"
+    description = "Fetch public media discovery records from GDELT, RSS feeds, and YouTube Data API"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.publicrecord.ingestion.MediaIngestionMainKt")
+}

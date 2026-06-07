@@ -7,8 +7,8 @@ export type Politician = {
   office: string;
   biography?: string;
   profileImageUrl?: string;
-  startDate: string;
-  endDate?: string;
+  startDate: string | [number, number, number];
+  endDate?: string | [number, number, number];
 };
 
 export type Bill = {
@@ -21,19 +21,153 @@ export type Bill = {
   chamber?: string;
   jurisdiction?: string;
   status: 'Pending' | 'Passed' | 'Failed' | 'Vetoed';
-  introducedDate: string;
-  lastActionDate?: string;
+  introducedDate: string | [number, number, number];
+  lastActionDate?: string | [number, number, number];
   billUrl?: string;
+};
+
+export type BillSponsor = {
+  id: string;
+  billId: string;
+  politicianId: string;
+  politicianName: string;
+  party?: string;
+  state?: string;
+  sponsorType: 'SPONSOR' | 'COSPONSOR';
+  sponsorshipDate?: string | [number, number, number];
+  sourceCitationId?: string;
+};
+
+export type BillDetail = {
+  bill: Bill;
+  sponsors: BillSponsor[];
+  cosponsors: BillSponsor[];
+  actions: Array<{ id: string; billId: string; actionDate: string | [number, number, number]; actionText: string; sourceCitationId?: string }>;
+  citations: Array<{ id: string; sourceName?: string; title?: string; url: string; sourceQuality: SourceQuality; confidence?: number }>;
+  votes: VotingRecord[];
 };
 
 export type VotingRecord = {
   id: string;
   politicianId: string;
+  politicianName?: string;
+  party?: string;
+  state?: string;
   billId: string;
   billNumber?: string;
   billTitle?: string;
+  billUrl?: string;
   voteType: 'YEA' | 'NAY' | 'ABSTAIN';
-  voteDate: string;
+  voteDate: string | [number, number, number];
+};
+
+export type OfficeHistoryItem = {
+  officeId: string;
+  title: string;
+  branch: 'EXECUTIVE' | 'LEGISLATIVE' | 'JUDICIAL';
+  officeLevel: 'STATE' | 'FEDERAL';
+  jurisdiction: string;
+  state?: string;
+  district?: string;
+  seatIdentifier: string;
+  startDate: string;
+  endDate?: string;
+  isCurrent: boolean;
+  sourceUrl: string;
+};
+
+export type ElectionCandidate = {
+  politicianId: string;
+  fullName: string;
+  party?: string;
+  ballotStatus: 'FILED' | 'CERTIFIED' | 'WITHDRAWN' | 'DISQUALIFIED';
+  resultStatus?: 'WON' | 'LOST' | 'RUNOFF' | 'PENDING';
+  voteTotal?: number;
+  votePercentage?: number;
+  sourceUrl: string;
+};
+
+export type ElectionHistoryItem = {
+  electionId: string;
+  officeId: string;
+  electionDate: string;
+  electionType: 'PRIMARY' | 'GENERAL' | 'SPECIAL' | 'RUNOFF';
+  cycleYear: number;
+  jurisdiction: string;
+  sourceUrl: string;
+  candidates: ElectionCandidate[];
+};
+
+export type ProfileTimelineItem = {
+  date: string;
+  category: string;
+  title: string;
+  description?: string;
+  sourceUrl?: string;
+};
+
+export type TimelineAggregate = {
+  politicianId: string;
+  generatedAt: string;
+  stats: {
+    total: number;
+    byCategory: Record<string, number>;
+    publishableCount: number;
+    reviewRequiredCount: number;
+    latestActivityAt?: string;
+  };
+  items: TimelineAggregateItem[];
+};
+
+export type TimelineAggregateItem = {
+  id: string;
+  date: string | [number, number, number];
+  category: string;
+  title: string;
+  description?: string;
+  sourceUrl?: string;
+  sourceName?: string;
+  targetType: string;
+  targetId?: string;
+  evidenceType: string;
+  publishable: boolean;
+  warnings: string[];
+};
+
+export type ProfileTrustSummary = {
+  averageScore: number;
+  citationCount: number;
+  openRiskCount: number;
+  records: TrustScore[];
+};
+
+export type PoliticianProfile = {
+  politician: Politician;
+  offices: OfficeHistoryItem[];
+  elections: ElectionHistoryItem[];
+  trustSummary: ProfileTrustSummary;
+  votingRecords: VotingRecord[];
+  votedBills: Array<{ bill: Bill; voteType: VotingRecord['voteType']; voteDate: string }>;
+  billsSupported: Bill[];
+  billsOpposed: Bill[];
+  billsSponsored: Bill[];
+  contentItems: Array<{ id: string; title: string; contentType: string; textBody?: string; sourceUrl?: string; publishedAt: string }>;
+  citations: Array<{
+    id: string;
+    sourceName?: string;
+    sourceType?: string;
+    citationType?: string;
+    targetId?: string;
+    title?: string;
+    url?: string;
+    archiveUrl?: string;
+    publishedAt?: string | [number, number, number];
+    retrievedAt?: string | [number, number, number];
+    quote?: string;
+    sourceQuality?: SourceQuality;
+    confidence?: number;
+  }>;
+  timeline: ProfileTimelineItem[];
 };
 
 export type BillVote = {
@@ -53,6 +187,54 @@ export type Statement = {
   date: string;
   excerpt: string;
   trust: TrustScore;
+};
+
+export type PublicStatement = {
+  id: string;
+  politicianId?: string;
+  statementType: 'SPEECH' | 'INTERVIEW' | 'SOCIAL' | 'PRESS_RELEASE' | 'DEBATE' | 'HEARING' | 'OTHER';
+  title: string;
+  body?: string;
+  quote?: string;
+  venue?: string;
+  statementDate: string;
+  sourceCitationId?: string;
+  confidence?: number;
+  suspiciousContent: boolean;
+};
+
+export type ClaimRecord = {
+  id: string;
+  politicianId?: string;
+  statementId?: string;
+  claimText: string;
+  claimType: InformationType;
+  status: 'VERIFIED' | 'DISPUTED' | 'UNRESOLVED' | 'RETRACTED';
+  confidence?: number;
+  firstSeenAt?: string | [number, number, number];
+  lastReviewedAt?: string | [number, number, number];
+  citationCount: number;
+  trust: TrustScore;
+  publishable: boolean;
+  reviewWarnings: string[];
+  factChecks: Array<{ id: string; rating: string; summary: string; checkedBy?: string; checkedAt: string; sourceCitationId?: string }>;
+};
+
+export type SourceCitationRecord = {
+  id: string;
+  sourceName?: string;
+  sourceType?: SourceQuality;
+  citationType: string;
+  targetId?: string;
+  title?: string;
+  url: string;
+  archiveUrl?: string;
+  publishedAt?: string | [number, number, number];
+  retrievedAt: string | [number, number, number];
+  quote?: string;
+  sourceQuality: SourceQuality;
+  confidence?: number;
+  manipulationWarnings: string[];
 };
 
 export type Citation = {
@@ -81,6 +263,30 @@ export type TrustScore = {
   confidenceLevel: 'HIGH' | 'MEDIUM' | 'LOW';
   score: number;
   explanation: string;
+};
+
+export type SearchResponse = {
+  query: string;
+  total: number;
+  groups: SearchGroup[];
+};
+
+export type SearchGroup = {
+  type: string;
+  label: string;
+  results: SearchResult[];
+};
+
+export type SearchResult = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  description?: string;
+  url?: string;
+  source?: string;
+  date?: string;
+  trustContext?: string;
+  reviewWarnings: string[];
 };
 
 export type InformationType =

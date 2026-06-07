@@ -44,6 +44,7 @@ class RepositoryIntegrationTest {
     static ContentItemRepository contentItemRepository;
     static ImportRepository importRepository;
     static AuditLogRepository auditLogRepository;
+    static ExternalIdentifierRepository externalIdentifierRepository;
 
     @BeforeAll
     static void setUpDatabase() throws Exception {
@@ -60,6 +61,7 @@ class RepositoryIntegrationTest {
         contentItemRepository = new ContentItemRepository(databaseConfig);
         importRepository = new ImportRepository(databaseConfig);
         auditLogRepository = new AuditLogRepository(databaseConfig);
+        externalIdentifierRepository = new ExternalIdentifierRepository(databaseConfig);
     }
 
     @Test
@@ -142,6 +144,57 @@ class RepositoryIntegrationTest {
                         .hasMessageContaining("audit_log is append-only");
             }
         }
+    }
+
+    @Test
+    @DisplayName("Should upsert external identifiers and social accounts")
+    void shouldUpsertExternalIdentifiersAndSocialAccounts() {
+        UUID politicianId = UUID.randomUUID();
+        assertThat(politicianRepository.save(new Politician(
+                politicianId,
+                "Jordan",
+                "Social",
+                "Independent",
+                "CO",
+                "Candidate",
+                "Candidate biography",
+                null,
+                LocalDate.of(2026, 1, 1),
+                null
+        ))).isTrue();
+
+        assertThat(externalIdentifierRepository.upsertExternalIdentifier(
+                "POLITICIAN",
+                politicianId,
+                "FEC",
+                "P60000001",
+                "https://www.fec.gov/data/candidate/P60000001/",
+                new java.math.BigDecimal("95.00"),
+                "{\"candidate\":true}"
+        )).isNotNull();
+
+        assertThat(externalIdentifierRepository.findBySource("POLITICIAN", "FEC", "P60000001"))
+                .isNotNull()
+                .extracting("entityId")
+                .isEqualTo(politicianId);
+
+        assertThat(externalIdentifierRepository.upsertSocialAccount(
+                politicianId,
+                "BLUESKY",
+                "@jordan.example",
+                "https://bsky.app/profile/jordan.example",
+                "Jordan Social",
+                "SELF_ASSERTED",
+                null,
+                new java.math.BigDecimal("75.00"),
+                "{\"source\":\"campaign site\"}"
+        )).isNotNull();
+
+        assertThat(externalIdentifierRepository.findSocialAccountsByPolitician(politicianId, 10))
+                .hasSize(1)
+                .first()
+                .extracting("handle")
+                .isEqualTo("jordan.example");
     }
 
     @Test

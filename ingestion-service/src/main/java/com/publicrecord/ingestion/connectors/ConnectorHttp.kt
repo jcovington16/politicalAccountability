@@ -11,17 +11,27 @@ interface ConnectorHttpClient {
     fun get(url: String): String
 }
 
+interface HeaderAwareConnectorHttpClient : ConnectorHttpClient {
+    fun get(url: String, headers: Map<String, String>): String
+}
+
 class JavaConnectorHttpClient(
     private val userAgent: String = "public-record-ingestion/0.1"
-) : ConnectorHttpClient {
+) : HeaderAwareConnectorHttpClient {
     private val client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build()
 
     override fun get(url: String): String {
-        val request = HttpRequest.newBuilder(URI.create(url))
+        return get(url, emptyMap())
+    }
+
+    override fun get(url: String, headers: Map<String, String>): String {
+        val builder = HttpRequest.newBuilder(URI.create(url))
             .header("Accept", "application/json")
             .header("User-Agent", userAgent)
             .GET()
-            .build()
+
+        headers.forEach { (name, value) -> builder.header(name, value) }
+        val request = builder.build()
         val response = client.send(request, HttpResponse.BodyHandlers.ofString())
 
         if (response.statusCode() !in 200..299) {

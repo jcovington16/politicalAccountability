@@ -22,10 +22,13 @@ Implemented:
 - React dashboard.
 - Expo React Native mobile MVP.
 - Local CSV/JSON ingestion.
-- Congress.gov, GovInfo, Open States, and Google Civic connector scaffolding.
+- Congress.gov, GovInfo, Open States, Google Civic, GDELT, Guardian, RSS, and YouTube connector scaffolding.
+- X and Bluesky public social-post discovery connector scaffolding.
 - Normalized bill/source-citation ingestion.
 - Politician profile aggregation endpoint.
+- Politician timeline aggregation endpoint.
 - Trust scoring model for evidence quality.
+- Internal review/warning model for evidence safety, source quality, and publishability.
 - Source registry and citations.
 - Claims, fact checks, public statements, tags.
 - Import batch visibility.
@@ -99,6 +102,9 @@ GOVINFO_API_KEY=
 OPENSTATES_API_KEY=
 GOOGLE_CIVIC_API_KEY=
 GOOGLE_CIVIC_ADDRESS=
+GUARDIAN_API_KEY=
+YOUTUBE_API_KEY=
+X_BEARER_TOKEN=
 ```
 
 Paste real API keys into `.env` locally only. Do not commit `.env`.
@@ -227,6 +233,42 @@ GOOGLE_CIVIC_ADDRESS="Denver, CO"
 
 Open States currently seeds state politicians and bills. Google Civic seeds address-based representative context. Imported records get `external_identifiers` so future pulls update existing records instead of duplicating them.
 
+### Public Media Discovery
+
+Fetch raw public media discovery records:
+
+```sh
+make ingest-media
+```
+
+Relevant `.env` values:
+
+```sh
+GDELT_QUERIES="Marco Rubio healthcare,Marco Rubio voting record"
+GDELT_MAX_RECORDS=10
+RSS_FEEDS="https://example.org/feed.xml|Example News,https://official.example.gov/news.xml|Official Press Room"
+GUARDIAN_API_KEY=...
+GUARDIAN_QUERIES="Marco Rubio healthcare,Marco Rubio voting record"
+GUARDIAN_PAGE_SIZE=10
+YOUTUBE_API_KEY=...
+YOUTUBE_QUERIES="Marco Rubio hearing,Marco Rubio interview"
+YOUTUBE_CHANNEL_IDS=
+YOUTUBE_MAX_RESULTS=5
+```
+
+GDELT, Guardian, and RSS records are stored as `article` raw events. YouTube records are stored as `video` raw events. These are discovery/citation candidates, not verified claims. Downstream review should link them to politicians, bills, public statements, citations, and trust scores before the app presents them as evidence.
+
+Public social discovery can also run through the media job:
+
+```sh
+BLUESKY_QUERIES="Marco Rubio"
+X_BEARER_TOKEN=...
+X_QUERIES="from:marcorubio"
+make ingest-media
+```
+
+Social posts are stored as `social_post` raw events and should be normalized into `public_statements` only after the account is linked through `social_accounts` and `external_identifiers`. A post is evidence of what a public account said; it is not automatically proof that a claim inside the post is true.
+
 ## API Overview
 
 Public read/search endpoints:
@@ -234,6 +276,9 @@ Public read/search endpoints:
 ```text
 GET /politicians/{id}
 GET /politicians/{id}/profile
+GET /politicians/{id}/timeline
+GET /search?query=...
+GET /identity/politicians/resolve?query=...&state=...&party=...
 GET /politicians/search/name?name=...
 GET /politicians/state/{state}
 GET /politicians/party/{party}
@@ -242,6 +287,11 @@ GET /bills/search?query=...
 GET /bills/{id}
 GET /bills/{id}/actions
 GET /bills/{id}/citations
+GET /claims?query=...
+GET /politicians/{id}/claims
+GET /citations?type=...&quality=...
+GET /citations/{citationType}/{targetId}
+GET /sources?type=...
 
 GET /politicians/{politicianId}/votes
 GET /bills/{billId}/votes
@@ -252,6 +302,9 @@ POST /trust/score
 Internal/admin endpoints:
 
 ```text
+GET /review/queue
+GET /review/politicians/{id}/completeness
+POST /classification/civic
 GET /imports
 GET /imports?status=COMPLETED
 GET /imports/{id}
@@ -280,11 +333,15 @@ The main profile endpoint is:
 
 ```text
 GET /politicians/{politicianId}/profile
+GET /politicians/{politicianId}/timeline
 ```
 
-It returns:
+The profile endpoint returns:
 
 - politician record
+- office history
+- election history with same-seat candidates
+- trust summary
 - voting records
 - voted bills
 - bills supported
@@ -295,6 +352,29 @@ It returns:
 - timeline items
 
 This is the endpoint the web and mobile profile screens should converge on as live data grows.
+
+The timeline endpoint returns a chronological activity feed built from normalized PostgreSQL rows: votes, sponsored bills, bill actions, public statements, claims, content/media records, office history, and elections. Each event includes an evidence type, source context where available, publishability, and review warnings. This lets the app show a strong demo with live data while keeping claims, media, and official records clearly separated.
+
+The identity endpoint helps ingestion and internal review match records from Congress.gov, Open States, FEC, Google Civic, media, YouTube, X, Bluesky, RSS, and other sources to the correct politician. Exact external IDs can auto-match. Weak name-only matches return `needsReview=true` so they do not become publishable evidence without confirmation.
+
+Voting records are also available independently:
+
+```text
+GET /politicians/{politicianId}/votes
+GET /bills/{billId}/votes
+```
+
+Those responses include the vote row plus joined bill or politician display fields so web/mobile screens do not need to make extra lookup requests for basic vote cards.
+
+Bill detail and statement endpoints:
+
+```text
+GET /bills/{billId}
+GET /statements?query=<text>
+GET /politicians/{politicianId}/statements
+```
+
+`GET /bills/{billId}` returns a detail aggregate with sponsors, cosponsors, actions, citations, and votes. Public statements are modeled separately from news articles so direct quotes, speeches, interviews, press releases, hearings, debates, and social posts can be displayed with their own source and confidence context.
 
 ## Search Behavior
 
@@ -310,7 +390,14 @@ Bill backend behavior:
 3. Store matching bills.
 4. Search PostgreSQL again and return stored records.
 
-Politician backend search is currently database-backed. Open States and Google Civic ingestion are the next source of real politician records.
+Politician/backend ingestion should follow the same cache-first pattern:
+
+1. Search PostgreSQL first.
+2. On a controlled miss or explicit refresh, call official providers such as Congress.gov members, Open States, and Google Civic.
+3. Upsert politicians, external identifiers, offices, bills, votes, citations, statements, claims, and content/media into PostgreSQL.
+4. Return stored database records to the dashboard and mobile app.
+
+This keeps external API usage low, protects provider keys on the server, and lets future searches reuse data that was already discovered.
 
 ## Trust Scoring
 
@@ -352,6 +439,21 @@ Content-Type: application/json
 }
 ```
 
+## Review And Warnings
+
+The public app should show records, citations, confidence context, and review warnings without deciding whether a politician or policy is good or bad. Voters decide what matters.
+
+Internal review can flag evidence that needs caution before public display:
+
+- missing or weak citations
+- unresolved claims and allegations
+- social posts from accounts that are not linked or verified
+- prompt-injection-like scraped text
+- potentially harmful, hateful, threatening, or discriminatory language that needs human review
+- media records that are still citation candidates rather than verified facts
+
+`POST /classification/civic` exists as protected internal review infrastructure only. It is not part of the public voter-facing API and should not be used to render public judgments such as "good", "bad", "problem-solving", or "problematic" labels. Public screens should prefer source context, citation counts, confidence, publish status, and neutral warnings.
+
 ## Database
 
 Migrations are managed by Liquibase.
@@ -380,6 +482,9 @@ Major schema areas:
 - news articles
 - source registry
 - source citations
+- external identifiers
+- social accounts
+- internal review records
 - public statements
 - claims
 - fact checks

@@ -16,7 +16,7 @@ class TimelineResourceTest {
 
     @Test
     void getTimelineRejectsInvalidUuid() {
-        Response response = resource.getTimeline("not-a-uuid", 50, 0);
+        Response response = resource.getTimeline("not-a-uuid", 50, 0, null);
 
         assertThat(response.getStatus()).isEqualTo(400);
         assertThat(response.getEntity()).isEqualTo("Invalid UUID format");

@@ -51,8 +51,10 @@ check_service() {
 # Check application endpoints
 echo "🌐 Checking application endpoints..."
 check_endpoint "$HEALTH_URL" "Health Check Endpoint"
-check_endpoint "$API_URL/api/health" "API Health Endpoint"
 check_endpoint "$METRICS_URL" "Metrics Endpoint"
+check_endpoint "$API_URL/politicians/not-a-uuid/profile" "Profile Endpoint Routing" 400
+check_endpoint "$API_URL/politicians/not-a-uuid/votes" "Politician Votes Endpoint Routing" 400
+check_endpoint "$API_URL/bills/not-a-uuid/votes" "Bill Votes Endpoint Routing" 400
 
 # Check database connectivity
 echo "🗄️ Checking database connectivity..."

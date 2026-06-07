@@ -1,4 +1,4 @@
-import type { Bill, Politician, TrustScore, VotingRecord } from './types';
+import type { Bill, BillDetail, ClaimRecord, Politician, PoliticianProfile, PublicStatement, SearchResponse, SourceCitationRecord, TimelineAggregate, TrustScore, VotingRecord } from './types';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api';
 
@@ -26,8 +26,16 @@ export async function searchPoliticians(name: string): Promise<Politician[]> {
   return getJson<Politician[]>(`/politicians/search/name?name=${encodeURIComponent(name)}`);
 }
 
+export async function globalSearch(query: string): Promise<SearchResponse> {
+  return getJson<SearchResponse>(`/search?query=${encodeURIComponent(query)}&limit=8`);
+}
+
 export async function getPolitician(id: string): Promise<Politician> {
   return getJson<Politician>(`/politicians/${id}`);
+}
+
+export async function getPoliticianProfile(id: string): Promise<PoliticianProfile> {
+  return getJson<PoliticianProfile>(`/politicians/${id}/profile`);
 }
 
 export async function getVotes(politicianId: string): Promise<VotingRecord[]> {
@@ -36,6 +44,26 @@ export async function getVotes(politicianId: string): Promise<VotingRecord[]> {
 
 export async function searchBills(query: string): Promise<Bill[]> {
   return getJson<Bill[]>(`/bills/search?query=${encodeURIComponent(query)}`);
+}
+
+export async function getBillDetail(id: string): Promise<BillDetail> {
+  return getJson<BillDetail>(`/bills/${id}`);
+}
+
+export async function getPublicStatements(politicianId: string): Promise<PublicStatement[]> {
+  return getJson<PublicStatement[]>(`/politicians/${politicianId}/statements`);
+}
+
+export async function getPoliticianClaims(politicianId: string): Promise<ClaimRecord[]> {
+  return getJson<ClaimRecord[]>(`/politicians/${politicianId}/claims?limit=100`);
+}
+
+export async function getPoliticianTimeline(politicianId: string): Promise<TimelineAggregate> {
+  return getJson<TimelineAggregate>(`/politicians/${politicianId}/timeline?limit=100`);
+}
+
+export async function searchCitations(query: string): Promise<SourceCitationRecord[]> {
+  return getJson<SourceCitationRecord[]>(`/citations?query=${encodeURIComponent(query)}&limit=100`);
 }
 
 export async function scoreTrust(payload: {

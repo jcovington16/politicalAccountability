@@ -11,7 +11,7 @@ import javax.ws.rs.ext.Provider
 @Provider
 @Priority(Priorities.AUTHENTICATION)
 class AdminAuthorizationFilter(private val adminApiToken: String) : ContainerRequestFilter {
-    private val protectedPrefixes = listOf("imports", "audit-log")
+    private val protectedPrefixes = listOf("imports", "audit-log", "review", "classification")
 
     override fun filter(requestContext: ContainerRequestContext) {
         val path = requestContext.uriInfo.path.trimStart('/')
