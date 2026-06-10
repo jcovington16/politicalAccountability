@@ -84,6 +84,13 @@ tasks.register<JavaExec>("runStateCivicIngestion") {
     mainClass.set("com.publicrecord.ingestion.StateCivicIngestionMainKt")
 }
 
+tasks.register<JavaExec>("runFederalExecutiveSeed") {
+    group = "application"
+    description = "Seed recent federal executive profiles so President searches work before full executive ingestion"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.publicrecord.ingestion.FederalExecutiveSeedMainKt")
+}
+
 tasks.register<JavaExec>("runMediaIngestion") {
     group = "application"
     description = "Fetch public media discovery records from GDELT, RSS feeds, and YouTube Data API"

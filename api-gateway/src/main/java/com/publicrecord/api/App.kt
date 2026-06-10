@@ -53,6 +53,8 @@ import com.publicrecord.storage.managed.KafkaManagedService
 import com.publicrecord.storage.managed.ProcessedContentSinkManagedService
 import org.slf4j.LoggerFactory
 import org.eclipse.jetty.servlets.CrossOriginFilter
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.EnumSet
 import javax.servlet.DispatcherType
 
@@ -148,6 +150,8 @@ class App : Application<AppConfig>() {
 
         configureCors(config, env)
         env.jersey().register(AdminAuthorizationFilter(config.adminApiToken))
+        env.jersey().register(PublicRateLimitFilter(config.rateLimitEnabled, config.publicSearchRateLimitPerMinute))
+        env.jersey().register(RequestTelemetryFilter())
 
         // Register API resources
         env.jersey().register(PoliticianResource(politicianRepository, politicianProfileService, votingRecordService, publicStatementService))
@@ -185,7 +189,16 @@ class App : Application<AppConfig>() {
     companion object {
         @JvmStatic
         fun main(args: Array<String>) {
-            App().run("server", "api-gateway/src/main/resources/config.yml")
+            App().run("server", resolveLocalConfigPath())
+        }
+
+        private fun resolveLocalConfigPath(): String {
+            val candidates = listOf(
+                Path.of("api-gateway/src/main/resources/config.yml"),
+                Path.of("src/main/resources/config.yml")
+            )
+            return candidates.firstOrNull { Files.exists(it) }?.toString()
+                ?: "api-gateway/src/main/resources/config.yml"
         }
     }
 }

@@ -45,6 +45,30 @@ class AdminAuthorizationFilterTest {
         verify(context, never()).abortWith(org.mockito.ArgumentMatchers.any(Response.class));
     }
 
+    @Test
+    void rejectsReviewPathsWithoutToken() {
+        AdminAuthorizationFilter filter = new AdminAuthorizationFilter("secret");
+        ContainerRequestContext context = contextFor("review/queue", null);
+
+        filter.filter(context);
+
+        verify(context).abortWith(org.mockito.ArgumentMatchers.argThat(response ->
+                response.getStatus() == Response.Status.UNAUTHORIZED.getStatusCode()
+        ));
+    }
+
+    @Test
+    void rejectsClassificationPathsWithoutToken() {
+        AdminAuthorizationFilter filter = new AdminAuthorizationFilter("secret");
+        ContainerRequestContext context = contextFor("classification/civic", null);
+
+        filter.filter(context);
+
+        verify(context).abortWith(org.mockito.ArgumentMatchers.argThat(response ->
+                response.getStatus() == Response.Status.UNAUTHORIZED.getStatusCode()
+        ));
+    }
+
     private static ContainerRequestContext contextFor(String path, String token) {
         UriInfo uriInfo = mock(UriInfo.class);
         when(uriInfo.getPath()).thenReturn(path);

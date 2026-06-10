@@ -2,10 +2,21 @@ import type { Bill, BillDetail, ClaimRecord, Politician, PoliticianProfile, Publ
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api';
 
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly statusText: string,
+    message?: string,
+  ) {
+    super(message ?? `${status} ${statusText}`);
+  }
+}
+
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`);
   if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`);
+    recordApiError(path, response.status, response.statusText);
+    throw new ApiError(response.status, response.statusText);
   }
   return response.json() as Promise<T>;
 }
@@ -17,9 +28,23 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`);
+    recordApiError(path, response.status, response.statusText);
+    throw new ApiError(response.status, response.statusText);
   }
   return response.json() as Promise<T>;
+}
+
+function recordApiError(path: string, status: number, statusText: string) {
+  if (typeof window === 'undefined') return;
+
+  window.dispatchEvent(new CustomEvent('publicrecord:api-error', {
+    detail: {
+      path,
+      status,
+      statusText,
+      observedAt: new Date().toISOString(),
+    },
+  }));
 }
 
 export async function searchPoliticians(name: string): Promise<Politician[]> {

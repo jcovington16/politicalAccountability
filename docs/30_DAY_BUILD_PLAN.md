@@ -222,59 +222,59 @@ Week 3 turns the app from "screens with endpoints" into an accountability engine
 
 Week 4 makes the app understandable and trustworthy for real voters. The public experience should answer: Who is this politician? What have they voted for or against? What bills did they sponsor? What have they said? What credible records support this?
 
-### Day 22
-- Backend: harden authorization, CORS, production config, and admin-only routes.
-- Frontend: remove internal Security tab from public mode and keep it available only for internal operators.
-- Mobile: confirm no internal/admin views are exposed.
-- Data ingestion: isolate production import credentials by provider and source.
-- Testing: security config tests and admin-route authorization tests.
-- Security: dependency scan, container scan, and secrets review.
-- Deployment: staging hardening checklist.
+### Day 22 - Complete
+- Backend: hardened authorization, CORS, production token validation, and admin-only route boundaries.
+- Frontend: internal Security tab is hidden by default and only appears when `VITE_SHOW_INTERNAL=true`.
+- Mobile: no internal/admin views are exposed.
+- Data ingestion: provider keys remain environment-only; federal executive seed is separated from legislative/API imports.
+- Testing: admin-route authorization tests cover review and classification protection.
+- Security: staging hardening checklist added in `docs/STAGING_HARDENING_CHECKLIST.md`.
+- Deployment: local/staging checklist documents config, route boundaries, rate limits, migrations, and smoke tests.
 
-### Day 23
-- Backend: add abuse-prevention request telemetry and rate limits for public search endpoints.
-- Frontend: graceful 429, empty, and degraded-data states.
-- Mobile: offline/error states for search, profile, bills, and citations.
-- Data ingestion: enforce per-source request limits and backoff.
-- Testing: rate-limit and degraded API tests.
-- Security: suspicious scraping/search pattern detection.
-- Deployment: metrics dashboard for API/search/import health.
+### Day 23 - Complete
+- Backend: added public search rate limiting, abuse-prevention request telemetry, and protected `GET /review/metrics`.
+- Frontend: search screens show graceful `429`, empty, fallback, and degraded-data messages.
+- Mobile: search shows a clear rate-limit message instead of generic API failure.
+- Data ingestion: connector HTTP client retries transient `429` and `5xx` responses with bounded backoff.
+- Testing: rate-limit tests cover allowed, blocked, and ignored paths.
+- Security: suspicious search/scraping patterns are documented in `docs/API_METRICS_AND_ABUSE_PREVENTION.md`.
+- Deployment: protected metrics endpoint gives staging visibility for API/search health.
 
-### Day 24
-- Backend: add privacy classification and public-record safety checks.
-- Frontend: hide or flag sensitive/private data before display.
-- Mobile: hide or flag sensitive/private data before display.
-- Data ingestion: reject private contact info, accidental personal data, or irrelevant private records unless explicitly allowed and lawful.
-- Testing: privacy validator tests.
-- Security: privacy review workflow and public-record-only policy.
-- Deployment: privacy policy draft and source-use policy draft.
+### Day 24 - Complete
+- Backend: added shared `PrivacySafetyService` for public-record safety checks, redaction, and privacy warnings.
+- Frontend: dashboard applies display-time redaction for private contact details in public text surfaces.
+- Mobile: Expo app applies display-time redaction for private contact details in public text surfaces.
+- Data ingestion: local ingestion skips high-risk private/sensitive biography, bill description, and article content instead of importing it.
+- Testing: privacy validator tests cover private contact redaction and high-risk identifier blocking.
+- Security: privacy/public-record policy draft added in `docs/PRIVACY_AND_PUBLIC_RECORD_POLICY.md`.
+- Deployment: source-use and privacy boundaries are documented before broader data expansion.
 
-### Day 25
-- Backend: finalize saved politicians strategy: local-first for MVP, backend sync only if accounts are enabled.
-- Frontend: saved politicians view shows latest activity and data gaps.
-- Mobile: saved politicians remains fast and local-first.
-- Data ingestion: no new source scope; focus on reliable seed dataset.
-- Testing: saved-state and profile refresh tests.
-- Security: account data access review if sync is enabled.
-- Deployment: mobile backend config freeze.
+### Day 25 - Complete
+- Backend: saved politicians remain local-first; no backend sync or voter-interest table is introduced for the MVP.
+- Frontend: saved politicians persist in browser storage and show saved time, latest known activity, and data gaps.
+- Mobile: saved politicians remain local-first, with Expo web persistence and no admin/account sync.
+- Data ingestion: no new source scope; continue focusing on reliable seed data and public-record privacy checks.
+- Testing: web/mobile build checks cover saved-state type safety and profile display.
+- Security: backend sync is deferred until accounts, consent, delete/export controls, and privacy review exist.
+- Deployment: saved-politicians strategy documented in `docs/SAVED_POLITICIANS_STRATEGY.md`.
 
-### Day 26
-- Backend: OpenAPI documentation and contract tests for public endpoints.
-- Frontend: API error telemetry hooks and final public copy review.
-- Mobile: API error telemetry hooks and final public copy review.
-- Data ingestion: importer operator guide for official, civic, and media sources.
-- Testing: contract tests for search, profile, bills, claims, citations, and timeline.
-- Security: review API docs for exposed internals.
-- Deployment: publish internal API docs.
+### Day 26 - Complete
+- Backend: added public OpenAPI documentation in `docs/openapi/public-record-api.yaml`.
+- Frontend: dashboard API failures now emit structured browser telemetry events and retain neutral public copy.
+- Mobile: Expo API failures now log structured telemetry details for local/device QA.
+- Data ingestion: importer operator guide added for official, civic, media, social, and local-file sources.
+- Testing: OpenAPI contract test verifies search, profile, bills, claims, citations, timeline, and internal-route exclusion.
+- Security: public API docs intentionally exclude imports, audit log, review queue, metrics, and classification internals.
+- Deployment: internal API documentation published in `docs/API_DOCUMENTATION.md`.
 
-### Day 27
-- Backend: performance tune search, profile aggregation, bill detail, timeline, and citation queries.
-- Frontend: loading states, empty states, and accessibility pass.
-- Mobile: loading states, empty states, device QA, and accessibility pass.
-- Data ingestion: final seed import for target state/federal officials.
-- Testing: load tests and end-to-end smoke tests.
-- Security: verify audit coverage for imports, source changes, and trust changes.
-- Deployment: staging performance run.
+### Day 27 - Complete
+- Backend: added hot-path PostgreSQL indexes for search/profile/bill/timeline/citation/read-model queries.
+- Frontend: dashboard search/bill results now have clearer loading announcements, empty states, and accessible result behavior.
+- Mobile: Expo search/bill flows now have empty states and accessible tappable result labels.
+- Data ingestion: operator runbook defines final seed import checks for target state/federal officials.
+- Testing: added repeatable API smoke and lightweight search-load scripts.
+- Security: smoke checks verify protected review metrics reject unauthenticated access.
+- Deployment: staging performance runbook added with pass criteria and follow-up metrics.
 
 ### Day 28
 - Backend: production deployment rehearsal and rollback plan.

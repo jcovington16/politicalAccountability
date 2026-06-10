@@ -16,7 +16,9 @@ interface HeaderAwareConnectorHttpClient : ConnectorHttpClient {
 }
 
 class JavaConnectorHttpClient(
-    private val userAgent: String = "public-record-ingestion/0.1"
+    private val userAgent: String = "public-record-ingestion/0.1",
+    private val maxAttempts: Int = (System.getenv("INGEST_HTTP_MAX_ATTEMPTS")?.toIntOrNull() ?: 3).coerceIn(1, 5),
+    private val initialBackoffMillis: Long = (System.getenv("INGEST_HTTP_BACKOFF_MS")?.toLongOrNull() ?: 1_000L).coerceAtLeast(100L)
 ) : HeaderAwareConnectorHttpClient {
     private val client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build()
 
@@ -32,13 +34,28 @@ class JavaConnectorHttpClient(
 
         headers.forEach { (name, value) -> builder.header(name, value) }
         val request = builder.build()
-        val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+        var lastStatus = 0
+        var lastBody = ""
 
-        if (response.statusCode() !in 200..299) {
-            error("HTTP request failed with status ${response.statusCode()} for $url")
+        repeat(maxAttempts) { attempt ->
+            val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+            lastStatus = response.statusCode()
+            lastBody = response.body()
+
+            if (response.statusCode() in 200..299) {
+                return response.body()
+            }
+
+            if (response.statusCode() != 429 && response.statusCode() !in 500..599) {
+                error("HTTP request failed with status ${response.statusCode()} for $url")
+            }
+
+            if (attempt < maxAttempts - 1) {
+                Thread.sleep(initialBackoffMillis * (attempt + 1))
+            }
         }
 
-        return response.body()
+        error("HTTP request failed with status $lastStatus for $url after $maxAttempts attempts. Body: ${lastBody.take(200)}")
     }
 }
 

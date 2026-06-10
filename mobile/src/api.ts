@@ -69,16 +69,35 @@ export type BillDetailResponse = {
 const expoConfig = Constants.expoConfig?.extra as { apiBaseUrl?: string } | undefined;
 const apiBaseUrl = expoConfig?.apiBaseUrl ?? 'http://localhost:8080';
 
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly statusText: string,
+  ) {
+    super(`API request failed: ${status} ${statusText}`);
+  }
+}
+
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     headers: { Accept: 'application/json' },
   });
 
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    recordApiError(path, response.status, response.statusText);
+    throw new ApiError(response.status, response.statusText);
   }
 
   return response.json() as Promise<T>;
+}
+
+function recordApiError(path: string, status: number, statusText: string) {
+  console.warn('Public Record API error', {
+    path,
+    status,
+    statusText,
+    observedAt: new Date().toISOString(),
+  });
 }
 
 export function searchPoliticians(query: string): Promise<Politician[]> {

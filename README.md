@@ -34,6 +34,7 @@ Implemented:
 - Import batch visibility.
 - Append-only audit log.
 - Admin-token protection for internal endpoints.
+- Public OpenAPI contract and smoke/load scripts for staging checks.
 
 Still in progress:
 
@@ -271,6 +272,9 @@ Social posts are stored as `social_post` raw events and should be normalized int
 
 ## API Overview
 
+The public OpenAPI contract is documented in `docs/openapi/public-record-api.yaml`.
+See `docs/API_DOCUMENTATION.md` for the public/internal route boundary.
+
 Public read/search endpoints:
 
 ```text
@@ -304,6 +308,7 @@ Internal/admin endpoints:
 ```text
 GET /review/queue
 GET /review/politicians/{id}/completeness
+GET /review/metrics
 POST /classification/civic
 GET /imports
 GET /imports?status=COMPLETED
@@ -326,6 +331,19 @@ X-Admin-Token: local-admin-token
 ```
 
 Use a long random `ADMIN_API_TOKEN` outside local development.
+
+## Operator And Staging Checks
+
+Import operators should follow `docs/IMPORT_OPERATOR_GUIDE.md` before loading official, civic, media, or social discovery records.
+
+Useful checks:
+
+```sh
+scripts/api-smoke-test.sh
+REQUESTS=30 QUERY="Trump" scripts/search-load-smoke.sh
+```
+
+Staging performance guidance lives in `docs/STAGING_PERFORMANCE_RUNBOOK.md`.
 
 ## Politician Profile Aggregation
 
@@ -453,6 +471,47 @@ Internal review can flag evidence that needs caution before public display:
 - media records that are still citation candidates rather than verified facts
 
 `POST /classification/civic` exists as protected internal review infrastructure only. It is not part of the public voter-facing API and should not be used to render public judgments such as "good", "bad", "problem-solving", or "problematic" labels. Public screens should prefer source context, citation counts, confidence, publish status, and neutral warnings.
+
+## Privacy And Saved Data
+
+The MVP has a public-record privacy guardrail that redacts obvious private contact details and blocks high-risk identifiers during local ingestion. The public app should not display home addresses, personal contact info, SSNs, payment data, private messages, or login-gated content.
+
+Saved politicians are local-first. The dashboard stores saved snapshots in browser storage; mobile keeps the same local-first model and should only add backend sync after accounts, consent, delete/export controls, and privacy review exist.
+
+See:
+
+- `docs/PRIVACY_AND_PUBLIC_RECORD_POLICY.md`
+- `docs/SAVED_POLITICIANS_STRATEGY.md`
+
+## Presidents And Executive Officials
+
+Congress.gov member ingestion covers Congress, and Open States covers state legislative data. Presidents are federal executive officials, so they do not appear from those legislative imports. Google Civic can return the President for an address-based representative lookup, but the database still needs a representative import or seed before the search bar can find presidential profiles.
+
+For local/demo coverage, seed recent U.S. Presidents:
+
+```sh
+make ingest-federal-executives
+```
+
+This creates baseline searchable profiles for recent Presidents and citations to primary/official public sources. It does not replace richer executive-branch ingestion for executive orders, statements, appointments, vetoes, public schedules, and White House press materials.
+
+## Rate Limits And Metrics
+
+Public search endpoints have a lightweight in-memory rate limit. Configure with:
+
+```sh
+RATE_LIMIT_ENABLED=true
+PUBLIC_SEARCH_RATE_LIMIT_PER_MINUTE=60
+```
+
+Protected metrics are available at:
+
+```text
+GET /review/metrics
+X-Admin-Token: <ADMIN_API_TOKEN>
+```
+
+See `docs/API_METRICS_AND_ABUSE_PREVENTION.md` and `docs/STAGING_HARDENING_CHECKLIST.md`.
 
 ## Database
 

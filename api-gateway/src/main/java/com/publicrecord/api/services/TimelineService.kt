@@ -3,6 +3,7 @@ package com.publicrecord.api.services
 import com.publicrecord.api.dto.TimelineAggregateDto
 import com.publicrecord.api.dto.TimelineItemDto
 import com.publicrecord.api.dto.TimelineStatsDto
+import com.publicrecord.common.privacy.PrivacySafetyService
 import com.publicrecord.storage.repositories.BillRepository
 import com.publicrecord.storage.repositories.ClaimRepository
 import com.publicrecord.storage.repositories.ContentItemRepository
@@ -90,12 +91,13 @@ class TimelineService(
 
         val statementItems = statements.map { statement ->
             val suspicious = suspiciousText(statement.title) || suspiciousText(statement.body) || suspiciousText(statement.quote)
+            val privacy = PrivacySafetyService.evaluate(statement.quote ?: statement.body)
             TimelineItemDto(
                 id = "statement:${statement.id}",
                 date = statement.statementDate,
                 category = "Statement",
                 title = statement.title,
-                description = statement.quote ?: statement.body,
+                description = privacy.redactedText.ifBlank { null },
                 sourceUrl = statement.sourceCitationId?.let {
                     sourceCitationRepository.findByTarget("STATEMENT", statement.id, 1).firstOrNull()?.url
                 },
@@ -103,8 +105,11 @@ class TimelineService(
                 targetType = "STATEMENT",
                 targetId = statement.id,
                 evidenceType = statement.statementType,
-                publishable = !suspicious,
-                warnings = if (suspicious) listOf("Statement text needs review before public AI processing.") else emptyList()
+                publishable = !suspicious && privacy.safeForPublicDisplay,
+                warnings = buildList {
+                    if (suspicious) add("Statement text needs review before public AI processing.")
+                    addAll(privacy.warnings)
+                }
             )
         }
 
@@ -130,19 +135,23 @@ class TimelineService(
 
         val contentItems = content.map { item ->
             val suspicious = suspiciousText(item.title) || suspiciousText(item.textBody)
+            val privacy = PrivacySafetyService.evaluate(item.textBody)
             TimelineItemDto(
                 id = "content:${item.id}",
                 date = item.publishedAt,
                 category = item.contentType.replaceFirstChar { it.uppercase() },
                 title = item.title,
-                description = item.textBody,
+                description = privacy.redactedText.ifBlank { null },
                 sourceUrl = item.sourceUrl,
                 sourceName = item.provenance?.sourceType,
                 targetType = "CONTENT_ITEM",
                 targetId = item.id,
                 evidenceType = item.contentType.uppercase(),
-                publishable = !suspicious,
-                warnings = if (suspicious) listOf("Content text needs review before public AI processing.") else emptyList()
+                publishable = !suspicious && privacy.safeForPublicDisplay,
+                warnings = buildList {
+                    if (suspicious) add("Content text needs review before public AI processing.")
+                    addAll(privacy.warnings)
+                }
             )
         }
 

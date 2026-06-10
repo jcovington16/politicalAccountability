@@ -4,6 +4,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient
 import co.elastic.clients.elasticsearch.core.IndexRequest
 import co.elastic.clients.json.jackson.JacksonJsonpMapper
 import co.elastic.clients.transport.rest_client.RestClientTransport
+import com.publicrecord.common.privacy.PrivacySafetyService
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
@@ -85,6 +86,12 @@ class LocalFileIngestionPipeline(
                 logger.warn("Skipping politician row without usable name: {}", row)
                 return@forEach
             }
+            val biographyPrivacy = PrivacySafetyService.evaluate(normalized["biography"])
+            if (!biographyPrivacy.safeForPublicDisplay) {
+                skipped++
+                logger.warn("Skipping politician row with private/sensitive biography text: {}", biographyPrivacy.warnings)
+                return@forEach
+            }
 
             val sql = """
                 INSERT INTO politicians
@@ -110,7 +117,7 @@ class LocalFileIngestionPipeline(
                 stmt.setString(4, normalized["party"])
                 stmt.setString(5, normalized["state"]?.uppercase())
                 stmt.setString(6, normalized["office"])
-                stmt.setString(7, normalized["biography"])
+                stmt.setString(7, biographyPrivacy.redactedText.ifBlank { null })
                 stmt.setString(8, normalized["profile_image_url"])
                 stmt.setObject(9, startDate)
                 stmt.setObject(10, parseDate(normalized["end_date"]))
@@ -123,7 +130,7 @@ class LocalFileIngestionPipeline(
                 "party" to normalized["party"],
                 "state" to normalized["state"]?.uppercase(),
                 "office" to normalized["office"],
-                "biography" to normalized["biography"]
+                "biography" to biographyPrivacy.redactedText.ifBlank { null }
             ))
             imported++
         }
@@ -145,6 +152,12 @@ class LocalFileIngestionPipeline(
             if (billNumber.isNullOrBlank() || title.isNullOrBlank() || introducedDate == null) {
                 skipped++
                 logger.warn("Skipping bill row with missing bill_number/title/introduced_date: {}", row)
+                return@forEach
+            }
+            val descriptionPrivacy = PrivacySafetyService.evaluate(normalized["description"])
+            if (!descriptionPrivacy.safeForPublicDisplay) {
+                skipped++
+                logger.warn("Skipping bill row with private/sensitive description text: {}", descriptionPrivacy.warnings)
                 return@forEach
             }
 
@@ -170,7 +183,7 @@ class LocalFileIngestionPipeline(
                 stmt.setObject(1, id)
                 stmt.setString(2, billNumber.trim().uppercase())
                 stmt.setString(3, title.trim())
-                stmt.setString(4, normalized["description"])
+                stmt.setString(4, descriptionPrivacy.redactedText.ifBlank { null })
                 stmt.setObject(5, introducedBy)
                 stmt.setString(6, status)
                 stmt.setObject(7, introducedDate)
@@ -183,7 +196,7 @@ class LocalFileIngestionPipeline(
                 "id" to id.toString(),
                 "billNumber" to billNumber.trim().uppercase(),
                 "title" to title,
-                "description" to normalized["description"],
+                "description" to descriptionPrivacy.redactedText.ifBlank { null },
                 "status" to status,
                 "introducedDate" to introducedDate.toString()
             ))
@@ -262,6 +275,12 @@ class LocalFileIngestionPipeline(
                 logger.warn("Skipping news row with missing title/source/url/content: {}", row)
                 return@forEach
             }
+            val contentPrivacy = PrivacySafetyService.evaluate(content)
+            if (!contentPrivacy.safeForPublicDisplay) {
+                skipped++
+                logger.warn("Skipping news row with private/sensitive content: {}", contentPrivacy.warnings)
+                return@forEach
+            }
 
             val id = parseUuid(normalized["id"]) ?: stableUuid("news:$url")
             val politicianId = parseUuid(normalized["politician_id"])
@@ -286,7 +305,7 @@ class LocalFileIngestionPipeline(
                 stmt.setString(4, source.trim())
                 stmt.setObject(5, publishedAt)
                 stmt.setString(6, url.trim())
-                stmt.setString(7, content)
+                stmt.setString(7, contentPrivacy.redactedText)
                 stmt.executeUpdate()
             }
 
@@ -297,7 +316,7 @@ class LocalFileIngestionPipeline(
                 "source" to source,
                 "publishedDate" to publishedAt?.toString(),
                 "url" to url,
-                "content" to content
+                "content" to contentPrivacy.redactedText
             ))
             imported++
         }

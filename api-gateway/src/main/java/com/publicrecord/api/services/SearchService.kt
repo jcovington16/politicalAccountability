@@ -3,6 +3,7 @@ package com.publicrecord.api.services
 import com.publicrecord.api.dto.SearchGroup
 import com.publicrecord.api.dto.SearchResponse
 import com.publicrecord.api.dto.SearchResult
+import com.publicrecord.common.privacy.PrivacySafetyService
 import com.publicrecord.storage.repositories.BillRepository
 import com.publicrecord.storage.repositories.ClaimRepository
 import com.publicrecord.storage.repositories.ContentItemRepository
@@ -23,22 +24,26 @@ class SearchService(
     fun search(query: String, limit: Int = 10): SearchResponse {
         val boundedLimit = limit.coerceIn(1, 25)
         val politicians = politicianRepository.searchByName(query, boundedLimit).map {
+            val privacy = PrivacySafetyService.evaluate(it.biography)
             SearchResult(
                 id = it.id.toString(),
                 title = "${it.firstName} ${it.lastName}",
                 subtitle = listOf(it.office, it.state, it.party).filter { value -> value.isNotBlank() }.joinToString(" · "),
-                description = it.biography,
-                url = "/politicians/${it.id}"
+                description = privacy.redactedText.ifBlank { null },
+                url = "/politicians/${it.id}",
+                reviewWarnings = privacy.warnings
             )
         }
         val bills = billRepository.searchWithSponsor(query, null, boundedLimit).map {
+            val privacy = PrivacySafetyService.evaluate(it.description)
             SearchResult(
                 id = it.id.toString(),
                 title = "${it.billNumber}: ${it.title}",
                 subtitle = it.status,
-                description = it.description,
+                description = privacy.redactedText.ifBlank { null },
                 url = "/bills/${it.id}",
-                date = it.lastActionDate?.toString() ?: it.introducedDate.toString()
+                date = it.lastActionDate?.toString() ?: it.introducedDate.toString(),
+                reviewWarnings = privacy.warnings
             )
         }
         val claims = claimRepository.search(query, null, null, boundedLimit)
@@ -57,26 +62,35 @@ class SearchService(
                 )
             }
         val statements = publicStatementRepository.search(query, null, boundedLimit).map {
+            val text = it.quote ?: it.body
             val suspicious = containsPromptInjectionLikeText("${it.title} ${it.body.orEmpty()} ${it.quote.orEmpty()}")
+            val privacy = PrivacySafetyService.evaluate(text)
             SearchResult(
                 id = it.id.toString(),
                 title = it.title,
                 subtitle = it.statementType.replace('_', ' '),
-                description = it.quote ?: it.body,
+                description = privacy.redactedText.ifBlank { null },
                 date = it.statementDate.toString(),
-                reviewWarnings = if (suspicious) listOf("Statement text needs review before AI summarization.") else emptyList()
+                reviewWarnings = buildList {
+                    if (suspicious) add("Statement text needs review before AI summarization.")
+                    addAll(privacy.warnings)
+                }
             )
         }
         val media = contentItemRepository.searchByKeyword(query, boundedLimit).map {
             val suspicious = containsPromptInjectionLikeText("${it.title} ${it.textBody.orEmpty()}")
+            val privacy = PrivacySafetyService.evaluate(it.textBody)
             SearchResult(
                 id = it.id.toString(),
                 title = it.title,
                 subtitle = it.contentType,
-                description = it.textBody,
+                description = privacy.redactedText.ifBlank { null },
                 url = it.sourceUrl,
                 date = it.publishedAt.toString(),
-                reviewWarnings = if (suspicious) listOf("Media text needs review before AI summarization.") else emptyList()
+                reviewWarnings = buildList {
+                    if (suspicious) add("Media text needs review before AI summarization.")
+                    addAll(privacy.warnings)
+                }
             )
         }
         val citations = sourceCitationRepository.search(null, null, query, boundedLimit).map {

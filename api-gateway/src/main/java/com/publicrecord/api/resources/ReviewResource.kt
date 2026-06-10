@@ -1,5 +1,6 @@
 package com.publicrecord.api.resources
 
+import com.publicrecord.api.RequestTelemetry
 import com.publicrecord.api.services.ProfileCompletenessService
 import com.publicrecord.api.services.ReviewQueueService
 import java.util.UUID
@@ -37,5 +38,11 @@ class ReviewResource(
         } catch (e: IllegalArgumentException) {
             Response.status(Response.Status.BAD_REQUEST).entity("Invalid UUID format").build()
         }
+    }
+
+    @GET
+    @Path("/metrics")
+    fun metrics(): Response {
+        return Response.ok(RequestTelemetry.snapshot()).build()
     }
 }

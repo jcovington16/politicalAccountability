@@ -1,0 +1,398 @@
+openapi: 3.0.3
+info:
+  title: Public Record API
+  version: 0.1.0
+  description: >
+    Public read/search API for the neutral political accountability MVP.
+    Internal admin routes such as imports, audit log, review, and classification
+    are intentionally excluded from this public contract.
+servers:
+  - url: http://localhost:8080
+    description: Local API gateway
+tags:
+  - name: Search
+  - name: Politicians
+  - name: Bills
+  - name: Votes
+  - name: Claims
+  - name: Sources
+  - name: Statements
+  - name: Trust
+paths:
+  /search:
+    get:
+      tags: [Search]
+      summary: Grouped public search
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Grouped search results across public record types.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /politicians/search/name:
+    get:
+      tags: [Politicians]
+      summary: Search politicians by name, office, party, or state
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Matching politicians.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Politician'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /politicians/{id}:
+    get:
+      tags: [Politicians]
+      summary: Get a politician
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Politician record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Politician'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /politicians/{id}/profile:
+    get:
+      tags: [Politicians]
+      summary: Aggregate politician profile
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Profile aggregate with offices, elections, votes, bills, citations, trust summary, content, and timeline.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /politicians/{id}/timeline:
+    get:
+      tags: [Politicians]
+      summary: Timeline aggregate for a politician
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Limit'
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Timeline aggregate with publishability and review warnings.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /politicians/{id}/votes:
+    get:
+      tags: [Votes]
+      summary: Voting record for a politician
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Joined voting records.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /politicians/{id}/statements:
+    get:
+      tags: [Statements]
+      summary: Public statements for a politician
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Public statements.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /politicians/{id}/claims:
+    get:
+      tags: [Claims]
+      summary: Claims attached to a politician
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/ClaimType'
+        - $ref: '#/components/parameters/ClaimStatus'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Claims with trust, citation counts, fact checks, publishability, and warnings.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /bills/search:
+    get:
+      tags: [Bills]
+      summary: Search bills
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [Pending, Passed, Failed, Vetoed]
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Matching bills.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /bills/{id}:
+    get:
+      tags: [Bills]
+      summary: Bill detail aggregate
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Bill detail with sponsors, cosponsors, actions, citations, and votes.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /bills/{id}/votes:
+    get:
+      tags: [Votes]
+      summary: Votes for a bill
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Joined bill vote records.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /claims:
+    get:
+      tags: [Claims]
+      summary: Search claims
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/ClaimType'
+        - $ref: '#/components/parameters/ClaimStatus'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Claims with evidence context.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /citations:
+    get:
+      tags: [Sources]
+      summary: Search source citations
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: quality
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Source citations.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /citations/{citationType}/{targetId}:
+    get:
+      tags: [Sources]
+      summary: Citations for a target record
+      parameters:
+        - name: citationType
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: targetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Citations for a target.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /sources:
+    get:
+      tags: [Sources]
+      summary: Search source registry
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Source registry entries.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /statements:
+    get:
+      tags: [Statements]
+      summary: Search public statements
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Public statements.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /trust/score:
+    post:
+      tags: [Trust]
+      summary: Score evidence quality, not ideology
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [informationType, sourceQuality]
+              properties:
+                informationType:
+                  type: string
+                sourceQuality:
+                  type: string
+                citationCount:
+                  type: integer
+                publishedDate:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Trust score.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Query:
+      name: query
+      in: query
+      required: false
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 250
+    ClaimType:
+      name: type
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [VERIFIED_FACT, DIRECT_QUOTE, VOTING_RECORD, ALLEGATION, OPINION_PIECE, UNRESOLVED_CLAIM]
+    ClaimStatus:
+      name: status
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [VERIFIED, DISPUTED, UNRESOLVED, RETRACTED]
+  responses:
+    BadRequest:
+      description: Invalid request.
+    NotFound:
+      description: Record not found.
+    RateLimited:
+      description: Too many requests; retry later.
+      headers:
+        Retry-After:
+          schema:
+            type: string
+  schemas:
+    Politician:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        party:
+          type: string
+        state:
+          type: string
+        office:
+          type: string
+        biography:
+          type: string
+        profileImageUrl:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+    SearchResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        total:
+          type: integer
+        groups:
+          type: array
+          items:
+            type: object

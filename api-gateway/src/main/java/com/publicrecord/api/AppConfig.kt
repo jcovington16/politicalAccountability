@@ -45,6 +45,12 @@ class AppConfig : Configuration() {
     @JsonProperty("adminApiToken")
     var adminApiToken: String = envOrDefault("ADMIN_API_TOKEN", localDevDefault("local-admin-token"))
 
+    @JsonProperty("publicSearchRateLimitPerMinute")
+    var publicSearchRateLimitPerMinute: Int = envIntOrDefault("PUBLIC_SEARCH_RATE_LIMIT_PER_MINUTE", 60)
+
+    @JsonProperty("rateLimitEnabled")
+    var rateLimitEnabled: Boolean = envBoolOrDefault("RATE_LIMIT_ENABLED", true)
+
     @JsonProperty("cors")
     var cors: CorsConfig = CorsConfig()  // New nested CORS configuration
 
@@ -65,14 +71,33 @@ class AppConfig : Configuration() {
         require(cors.allowedOrigins != "*") {
             "Wildcard CORS origins are not allowed in production"
         }
+        require(!cors.allowCredentials || cors.allowedOrigins != "*") {
+            "Credentialed CORS cannot use wildcard origins"
+        }
         require(adminApiToken.isNotBlank()) {
             "ADMIN_API_TOKEN or adminApiToken must be set in production"
+        }
+        require(adminApiToken.length >= 24) {
+            "ADMIN_API_TOKEN must be at least 24 characters in production"
+        }
+        require(publicSearchRateLimitPerMinute in 10..600) {
+            "PUBLIC_SEARCH_RATE_LIMIT_PER_MINUTE must be between 10 and 600"
         }
     }
 
     companion object {
         private fun envOrDefault(name: String, defaultValue: String): String {
             return System.getenv(name)?.takeIf { it.isNotBlank() } ?: defaultValue
+        }
+
+        private fun envIntOrDefault(name: String, defaultValue: Int): Int {
+            return System.getenv(name)?.trim()?.toIntOrNull() ?: defaultValue
+        }
+
+        private fun envBoolOrDefault(name: String, defaultValue: Boolean): Boolean {
+            return System.getenv(name)?.trim()?.lowercase()?.let {
+                it == "true" || it == "1" || it == "yes"
+            } ?: defaultValue
         }
 
         /*

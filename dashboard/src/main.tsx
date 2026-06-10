@@ -15,7 +15,7 @@ import {
   UserRound,
   Vote,
 } from 'lucide-react';
-import { getBillDetail, getPoliticianClaims, getPoliticianProfile, getPoliticianTimeline, getPublicStatements, globalSearch, searchBills as searchBillsApi, searchPoliticians } from './api';
+import { ApiError, getBillDetail, getPoliticianClaims, getPoliticianProfile, getPoliticianTimeline, getPublicStatements, globalSearch, searchBills as searchBillsApi, searchPoliticians } from './api';
 import {
   accomplishments,
   controversies,
@@ -45,6 +45,15 @@ const tabs = [
 ] as const;
 
 type Tab = (typeof tabs)[number];
+const showInternalTabs = import.meta.env.VITE_SHOW_INTERNAL === 'true';
+const visibleTabs = tabs.filter((tab) => showInternalTabs || tab !== 'Security');
+type SavedPoliticianSnapshot = {
+  politician: Politician;
+  savedAt: string;
+  latestActivity?: string;
+  dataGaps: string[];
+};
+const savedStorageKey = 'public-record:saved-politicians:v1';
 
 function App() {
   const [view, setView] = useState<View>('search');
@@ -59,7 +68,8 @@ function App() {
   const [publicStatements, setPublicStatements] = useState<PublicStatement[]>([]);
   const [claims, setClaims] = useState<ClaimRecord[]>([]);
   const [timelineAggregate, setTimelineAggregate] = useState<TimelineAggregate | null>(null);
-  const [savedIds, setSavedIds] = useState<string[]>([samplePoliticians[0].id]);
+  const [savedRecords, setSavedRecords] = useState<SavedPoliticianSnapshot[]>(() => loadSavedSnapshots());
+  const savedIds = savedRecords.map((record) => record.politician.id);
   const [results, setResults] = useState<Politician[]>(samplePoliticians);
   const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null);
   const [billResults, setBillResults] = useState<Bill[]>(sampleBills);
@@ -134,13 +144,13 @@ function App() {
         setApiState(local.length > 0 ? 'No API matches, showing sample data' : 'No matches found');
         setView('search');
       }
-    } catch {
+    } catch (error) {
       if (searchId !== latestPoliticianSearch.current) return;
       const local = filterSamplePoliticians(searchTerm);
       setResults(local);
       setSearchResponse(null);
       if (local[0]) setSelected(local[0]);
-      setApiState('API unavailable, filtered sample data');
+      setApiState(error instanceof ApiError && error.status === 429 ? 'Search is busy. Please try again in a minute.' : 'API unavailable, filtered sample data');
       setView('search');
     }
   }
@@ -213,8 +223,25 @@ function App() {
       .catch(() => setSelectedBillDetail(null));
   }
 
-  function toggleSaved(id: string) {
-    setSavedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  useEffect(() => {
+    window.localStorage.setItem(savedStorageKey, JSON.stringify(savedRecords));
+  }, [savedRecords]);
+
+  function toggleSaved(politician: Politician, profile: PoliticianProfile | null, aggregate: TimelineAggregate | null) {
+    setSavedRecords((current) => {
+      if (current.some((item) => item.politician.id === politician.id)) {
+        return current.filter((item) => item.politician.id !== politician.id);
+      }
+      return [
+        ...current,
+        {
+          politician,
+          savedAt: new Date().toISOString(),
+          latestActivity: aggregate?.stats.latestActivityAt,
+          dataGaps: profileDataGaps(profile),
+        },
+      ];
+    });
   }
 
   async function runBillSearch(searchTerm = billQuery.trim()) {
@@ -245,11 +272,11 @@ function App() {
         setBillApiState(local.length > 0 ? 'No API matches, showing sample bill data' : 'No bill matches found');
         if (local[0]) setSelectedBill(local[0]);
       }
-    } catch {
+    } catch (error) {
       if (searchId !== latestBillSearch.current) return;
       const local = filterSampleBills(trimmed);
       setBillResults(local);
-      setBillApiState('API unavailable, filtered sample bill data');
+      setBillApiState(error instanceof ApiError && error.status === 429 ? 'Bill search is busy. Please try again in a minute.' : 'API unavailable, filtered sample bill data');
       if (local[0]) setSelectedBill(local[0]);
     }
   }
@@ -294,7 +321,7 @@ function App() {
                 <FileSearch size={18} aria-hidden="true" />
               </button>
             </div>
-            <p>{apiState}</p>
+            <p aria-live="polite">{apiState}</p>
           </div>
         )}
 
@@ -321,7 +348,7 @@ function App() {
                 <FileSearch size={18} aria-hidden="true" />
               </button>
             </div>
-            <p>{billApiState}</p>
+            <p aria-live="polite">{billApiState}</p>
           </div>
         )}
 
@@ -341,6 +368,7 @@ function App() {
               </div>
             </button>
           ))}
+          {results.length === 0 && <p className="body-copy">No politician matches yet.</p>}
           </div>
         )}
 
@@ -355,11 +383,12 @@ function App() {
                 </div>
               </button>
             ))}
+            {billResults.length === 0 && <p className="body-copy">No bill matches yet.</p>}
           </div>
         )}
 
         {view === 'profile' && <nav className="tab-list" aria-label="Dashboard sections">
-          {tabs.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab}
               type="button"
@@ -374,12 +403,12 @@ function App() {
 
       <main className="content">
         {view === 'search' && <SearchLanding results={results} searchResponse={searchResponse} onOpenPolitician={openPolitician} onOpenBillById={openBillById} />}
-        {view === 'saved' && <SavedPoliticians savedIds={savedIds} onOpenPolitician={openPolitician} />}
+        {view === 'saved' && <SavedPoliticians records={savedRecords} onOpenPolitician={openPolitician} />}
         {view === 'bills' && <BillSearchLanding bills={billResults} onOpenBill={openBill} />}
         {view === 'billDetail' && <BillDetail bill={selectedBill} detail={selectedBillDetail} onBack={() => setView('bills')} onOpenPolitician={openPolitician} />}
         {view === 'profile' && (
           <>
-            <Header politician={selected} profile={selectedProfile} profileState={profileState} saved={savedIds.includes(selected.id)} onToggleSaved={() => toggleSaved(selected.id)} />
+            <Header politician={selected} profile={selectedProfile} profileState={profileState} saved={savedIds.includes(selected.id)} onToggleSaved={() => toggleSaved(selected, selectedProfile, timelineAggregate)} />
             {activeTab === 'Overview' && <Overview politician={selected} profile={selectedProfile} />}
             {activeTab === 'Votes' && <Votes votes={visibleVotes} supportedCount={supported.length} opposedCount={opposed.length} onOpenBill={openBill} />}
             {activeTab === 'Bills' && <Bills profile={selectedProfile} onOpenBill={openBill} />}
@@ -387,7 +416,7 @@ function App() {
             {activeTab === 'Controversies' && <Controversies claims={claims} />}
             {activeTab === 'Citations' && <Citations profile={selectedProfile} />}
             {activeTab === 'Timeline' && <Timeline aggregate={timelineAggregate} />}
-            {activeTab === 'Security' && <SecurityArchitecture />}
+            {showInternalTabs && activeTab === 'Security' && <SecurityArchitecture />}
           </>
         )}
       </main>
@@ -413,6 +442,34 @@ function filterSampleBills(query: string): Bill[] {
       .toLowerCase()
       .includes(value),
   );
+}
+
+function loadSavedSnapshots(): SavedPoliticianSnapshot[] {
+  try {
+    const raw = window.localStorage.getItem(savedStorageKey);
+    if (!raw) {
+      return [{
+        politician: samplePoliticians[0],
+        savedAt: new Date().toISOString(),
+        latestActivity: undefined,
+        dataGaps: ['Live profile not refreshed yet'],
+      }];
+    }
+    const parsed = JSON.parse(raw) as SavedPoliticianSnapshot[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function profileDataGaps(profile: PoliticianProfile | null): string[] {
+  if (!profile) return ['Live profile not refreshed yet'];
+  const gaps: string[] = [];
+  if (profile.votingRecords.length === 0) gaps.push('Votes');
+  if (profile.billsSponsored.length === 0) gaps.push('Sponsored bills');
+  if (profile.citations.length === 0) gaps.push('Citations');
+  if (profile.timeline.length === 0) gaps.push('Timeline');
+  return gaps.length > 0 ? gaps : ['Core profile data present'];
 }
 
 function Header({
@@ -510,7 +567,7 @@ function SearchLanding({
                         <div>
                           <strong>{result.title}</strong>
                           <small>{[result.subtitle, result.source, result.date && formatDisplayDate(result.date)].filter(Boolean).join(' · ')}</small>
-                          {result.description && <p>{result.description.slice(0, 180)}</p>}
+                          {result.description && <p>{redactPrivateDisplayText(result.description).slice(0, 180)}</p>}
                           {result.trustContext && <small>{result.trustContext}</small>}
                           {result.reviewWarnings.length > 0 && <small>{result.reviewWarnings.join(' ')}</small>}
                         </div>
@@ -534,28 +591,29 @@ function SearchLanding({
               </div>
             </button>
           ))}
+          {results.length === 0 && <p className="body-copy">No politician matches yet. Try another name, state, office, or party.</p>}
         </div>
       </Panel>
     </section>
   );
 }
 
-function SavedPoliticians({ savedIds, onOpenPolitician }: { savedIds: string[]; onOpenPolitician: (politician: Politician) => void }) {
-  const saved = samplePoliticians.filter((politician) => savedIds.includes(politician.id));
-
+function SavedPoliticians({ records, onOpenPolitician }: { records: SavedPoliticianSnapshot[]; onOpenPolitician: (politician: Politician) => void }) {
   return (
     <Panel title="Saved Politicians" icon={<BadgeCheck size={18} />}>
       <div className="card-list">
-        {saved.map((politician) => (
+        {records.map(({ politician, savedAt, latestActivity, dataGaps }) => (
           <button key={politician.id} type="button" className="record-card" onClick={() => onOpenPolitician(politician)}>
             <span className="small-avatar">{politician.firstName[0]}{politician.lastName[0]}</span>
             <div>
               <strong>{politician.firstName} {politician.lastName}</strong>
               <small>{politician.office} · {politician.state}</small>
+              <small>Saved {formatDisplayDate(savedAt)} · Latest activity {formatDisplayDate(latestActivity)}</small>
+              <small>Data gaps: {dataGaps.join(', ')}</small>
             </div>
           </button>
         ))}
-        {saved.length === 0 && <p className="body-copy">No saved politicians yet.</p>}
+        {records.length === 0 && <p className="body-copy">No saved politicians yet.</p>}
       </div>
     </Panel>
   );
@@ -589,7 +647,7 @@ function Overview({ politician, profile }: { politician: Politician; profile: Po
   return (
     <section className="grid two">
       <Panel title="Biography" icon={<UserRound size={18} />}>
-        <p className="body-copy">{politician.biography}</p>
+        <p className="body-copy">{redactPrivateDisplayText(politician.biography)}</p>
         <div className="fact-grid">
           <Fact label="Office" value={politician.office} />
           <Fact label="State" value={politician.state} />
@@ -712,6 +770,7 @@ function BillList({ bills, onOpenBill }: { bills: Bill[]; onOpenBill: (bill: Bil
           <small>Introduced {formatDisplayDate(bill.introducedDate)} · Sponsor: {bill.sponsor ?? 'Unknown'}</small>
         </button>
       ))}
+      {bills.length === 0 && <p className="body-copy">No bills found. Try a bill number, title, sponsor, or topic.</p>}
     </div>
   );
 }
@@ -872,7 +931,7 @@ function Statements({ statements }: { statements: PublicStatement[] }) {
                 <span>{statement.statementType.replace(/_/g, ' ')}</span>
                 <time>{formatDisplayDate(statement.statementDate)}</time>
               </div>
-              <blockquote>{statement.quote ?? statement.body ?? 'No statement text recorded.'}</blockquote>
+              <blockquote>{redactPrivateDisplayText(statement.quote ?? statement.body ?? 'No statement text recorded.')}</blockquote>
               <div className="risk-row">
                 <span className={`risk ${statement.suspiciousContent ? 'high' : 'low'}`}>
                   {statement.suspiciousContent ? 'Needs review' : 'Publishable'}
@@ -895,7 +954,7 @@ function Statements({ statements }: { statements: PublicStatement[] }) {
               <span>{statement.type}</span>
               <time>{statement.date}</time>
             </div>
-            <blockquote>{statement.excerpt}</blockquote>
+            <blockquote>{redactPrivateDisplayText(statement.excerpt)}</blockquote>
             <TrustBadge score={statement.trust.score} confidence={statement.trust.confidenceLevel} />
           </div>
         </Panel>
@@ -917,7 +976,7 @@ function Controversies({ claims }: { claims: ClaimRecord[] }) {
               </span>
               <span>{claim.trust.confidenceLevel} confidence · {claim.citationCount} citation{claim.citationCount === 1 ? '' : 's'}</span>
             </div>
-            <p className="body-copy">{claim.claimText}</p>
+            <p className="body-copy">{redactPrivateDisplayText(claim.claimText)}</p>
             {claim.reviewWarnings.length > 0 && (
               <ul className="clean-list">
                 {claim.reviewWarnings.map((warning) => <li key={warning}>{warning}</li>)}
@@ -1025,7 +1084,7 @@ function Timeline({ aggregate }: { aggregate: TimelineAggregate | null }) {
               <div>
                 <span>{item.category} · {item.evidenceType.replace(/_/g, ' ')}</span>
                 <h3>{item.title}</h3>
-                <p>{item.description}</p>
+                <p>{redactPrivateDisplayText(item.description)}</p>
                 {item.sourceUrl && (
                   <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceName ?? 'Source'}</a>
                 )}
@@ -1136,6 +1195,14 @@ function formatDisplayDate(value?: string | [number, number, number]): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed);
+}
+
+function redactPrivateDisplayText(value?: string): string {
+  if (!value) return '';
+  return value
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[redacted email]')
+    .replace(/(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/g, '[redacted phone]')
+    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[redacted ssn]');
 }
 
 function formatDateParts(year: number, month: number, day: number): string {

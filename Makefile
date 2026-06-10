@@ -1,6 +1,6 @@
 # Political Accountability App - Development Makefile
 
-.PHONY: help build test clean run deploy health-check docker-build docker-run db-status db-migrate db-validate db-history db-rollback db-new db-tag ingest-local ingest-dry-run ingest-congress-bills ingest-congress-members ingest-govinfo-packages ingest-state-civic ingest-media kafka-raw-log dashboard-install dashboard-dev dashboard-build mobile-install mobile-start mobile-typecheck
+.PHONY: help build test clean run deploy health-check api-smoke load-smoke docker-build docker-run db-status db-migrate db-validate db-history db-rollback db-new db-tag ingest-local ingest-dry-run ingest-congress-bills ingest-congress-members ingest-govinfo-packages ingest-state-civic ingest-federal-executives ingest-media kafka-raw-log dashboard-install dashboard-dev dashboard-build mobile-install mobile-start mobile-typecheck
 
 # Default target
 help:
@@ -24,6 +24,7 @@ help:
 	@echo "  ingest-congress-members - Fetch Congress.gov member profiles"
 	@echo "  ingest-govinfo-packages - Fetch recent GovInfo official document events"
 	@echo "  ingest-state-civic - Fetch Open States and Google Civic records"
+	@echo "  ingest-federal-executives - Seed recent U.S. President profiles"
 	@echo "  ingest-media - Fetch public media discovery records from GDELT, RSS, and YouTube"
 	@echo "  kafka-raw-log - Print raw-content Kafka events"
 	@echo "  dashboard-dev  - Run React dashboard"
@@ -40,6 +41,8 @@ help:
 	@echo "  deploy         - Deploy to staging"
 	@echo "  deploy-prod    - Deploy to production"
 	@echo "  health-check   - Run health checks"
+	@echo "  api-smoke      - Run public/admin API smoke checks"
+	@echo "  load-smoke     - Run small search load smoke test"
 	@echo ""
 	@echo "Quality:"
 	@echo "  security-scan  - Run security vulnerability scan"
@@ -128,6 +131,12 @@ health-check:
 	@echo "🔍 Running health checks..."
 	./scripts/health-check.sh
 
+api-smoke:
+	./scripts/api-smoke-test.sh
+
+load-smoke:
+	./scripts/search-load-smoke.sh
+
 # Quality targets
 security-scan:
 	@echo "🔒 Running security vulnerability scan..."
@@ -212,6 +221,9 @@ ingest-official-normalized:
 
 ingest-state-civic:
 	@set -a; [ ! -f .env ] || . ./.env; set +a; ./gradlew :ingestion-service:runStateCivicIngestion
+
+ingest-federal-executives:
+	@set -a; [ ! -f .env ] || . ./.env; set +a; ./gradlew :ingestion-service:runFederalExecutiveSeed
 
 ingest-media:
 	@set -a; [ ! -f .env ] || . ./.env; set +a; ./gradlew :ingestion-service:runMediaIngestion

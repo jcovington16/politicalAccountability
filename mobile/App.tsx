@@ -11,15 +11,22 @@ import {
   View,
 } from 'react-native';
 import { articles, bills, billVotes, citations, politicians, stances, timeline, votes } from './src/data';
-import { getBillDetail, getBillVotes, getPoliticianClaims, getPoliticianProfile, getPoliticianTimeline, getPublicStatements, getVotingRecord, searchBills as searchBillsApi, searchPoliticians } from './src/api';
+import { ApiError, getBillDetail, getBillVotes, getPoliticianClaims, getPoliticianProfile, getPoliticianTimeline, getPublicStatements, getVotingRecord, searchBills as searchBillsApi, searchPoliticians } from './src/api';
 import type { Bill, BillVote, ClaimRecord, Politician, PublicStatement, TimelineAggregate, VoteRecord } from './src/types';
 import type { BillDetailResponse, PoliticianProfileResponse } from './src/api';
 
 type MainScreen = 'Search' | 'Bills' | 'Profile' | 'Saved' | 'BillDetail';
 type ProfileTab = 'Overview' | 'Votes' | 'Bills' | 'Articles' | 'Issues' | 'Timeline' | 'Compare' | 'Citations';
+type SavedPoliticianSnapshot = {
+  politician: Politician;
+  savedAt: string;
+  latestActivity?: string;
+  dataGaps: string[];
+};
 
 const mainScreens: MainScreen[] = ['Search', 'Bills', 'Saved'];
 const profileTabs: ProfileTab[] = ['Overview', 'Votes', 'Bills', 'Articles', 'Issues', 'Timeline', 'Compare', 'Citations'];
+const savedStorageKey = 'public-record-mobile:saved-politicians:v1';
 
 export default function App() {
   const [screen, setScreen] = useState<MainScreen>('Search');
@@ -28,7 +35,8 @@ export default function App() {
   const [selected, setSelected] = useState<Politician>(politicians[0]);
   const [selectedBill, setSelectedBill] = useState<Bill>(bills[0]);
   const [compare, setCompare] = useState<Politician>(politicians[1]);
-  const [saved, setSaved] = useState<string[]>([politicians[0].id]);
+  const [savedRecords, setSavedRecords] = useState<SavedPoliticianSnapshot[]>(() => loadSavedSnapshots());
+  const saved = savedRecords.map((record) => record.politician.id);
   const [livePoliticians, setLivePoliticians] = useState<Politician[]>([]);
   const [liveBills, setLiveBills] = useState<Bill[]>([]);
   const [profile, setProfile] = useState<PoliticianProfileResponse | null>(null);
@@ -63,6 +71,10 @@ export default function App() {
   }, [query, liveBills]);
 
   useEffect(() => {
+    persistSavedSnapshots(savedRecords);
+  }, [savedRecords]);
+
+  useEffect(() => {
     const value = query.trim();
     if (!value) {
       setLivePoliticians([]);
@@ -77,7 +89,7 @@ export default function App() {
           setLivePoliticians(items);
           setDataState(items.length > 0 ? 'Connected to API' : 'No API politician matches');
         })
-        .catch(() => setDataState('API unavailable, using sample data'));
+        .catch((error) => setDataState(error instanceof ApiError && error.status === 429 ? 'Search is busy. Please try again in a minute.' : 'API unavailable, using sample data'));
 
       void searchBillsApi(value)
         .then(setLiveBills)
@@ -140,8 +152,21 @@ export default function App() {
       });
   }
 
-  function toggleSaved(id: string) {
-    setSaved((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  function toggleSaved(person: Politician) {
+    setSavedRecords((current) => {
+      if (current.some((item) => item.politician.id === person.id)) {
+        return current.filter((item) => item.politician.id !== person.id);
+      }
+      return [
+        ...current,
+        {
+          politician: person,
+          savedAt: new Date().toISOString(),
+          latestActivity: profileTimeline?.stats.latestActivityAt,
+          dataGaps: profileDataGaps(profile, profileTimeline),
+        },
+      ];
+    });
   }
 
   const appContent = (
@@ -179,7 +204,7 @@ export default function App() {
             claims={profileClaims}
             timelineAggregate={profileTimeline}
             saved={saved.includes(selected.id)}
-            onSave={() => toggleSaved(selected.id)}
+            onSave={() => toggleSaved(selected)}
             activeTab={profileTab}
             setActiveTab={setProfileTab}
             compare={compare}
@@ -207,7 +232,7 @@ export default function App() {
             }}
           />
         )}
-        {screen === 'Saved' && <SavedScreen savedIds={saved} onSelect={openPolitician} />}
+        {screen === 'Saved' && <SavedScreen records={savedRecords} onSelect={openPolitician} />}
       </ScrollView>
     </View>
   );
@@ -281,6 +306,8 @@ function SearchScreen({
         <Pressable
           key={person.id}
           onPress={() => onSelect(person)}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${person.firstName} ${person.lastName}`}
           style={[styles.personRow, selected.id === person.id && styles.personRowActive]}
         >
           <Avatar person={person} />
@@ -290,8 +317,48 @@ function SearchScreen({
           </View>
         </Pressable>
       ))}
+      {results.length === 0 && <Text style={styles.body}>No politician matches yet. Try another name, state, office, or party.</Text>}
     </View>
   );
+}
+
+function loadSavedSnapshots(): SavedPoliticianSnapshot[] {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    return [{
+      politician: politicians[0],
+      savedAt: new Date().toISOString(),
+      dataGaps: ['Live profile not refreshed yet'],
+    }];
+  }
+  try {
+    const raw = window.localStorage.getItem(savedStorageKey);
+    if (!raw) {
+      return [{
+        politician: politicians[0],
+        savedAt: new Date().toISOString(),
+        dataGaps: ['Live profile not refreshed yet'],
+      }];
+    }
+    const parsed = JSON.parse(raw) as SavedPoliticianSnapshot[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistSavedSnapshots(records: SavedPoliticianSnapshot[]) {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  window.localStorage.setItem(savedStorageKey, JSON.stringify(records));
+}
+
+function profileDataGaps(profile: PoliticianProfileResponse | null, aggregate: TimelineAggregate | null): string[] {
+  if (!profile) return ['Live profile not refreshed yet'];
+  const gaps: string[] = [];
+  if (profile.votingRecords.length === 0) gaps.push('Votes');
+  if (profile.billsSponsored.length === 0) gaps.push('Sponsored bills');
+  if (profile.citations.length === 0) gaps.push('Citations');
+  if (!aggregate || aggregate.stats.total === 0) gaps.push('Timeline');
+  return gaps.length > 0 ? gaps : ['Core profile data present'];
 }
 
 function BillSearchScreen({
@@ -325,13 +392,14 @@ function BillSearchScreen({
       {results.map((bill) => (
         <BillRow key={bill.id} bill={bill} onOpenBill={onOpenBill} />
       ))}
+      {results.length === 0 && <Text style={styles.body}>No bills found. Try a bill number, title, sponsor, or topic.</Text>}
     </View>
   );
 }
 
 function BillRow({ bill, onOpenBill }: { bill: Bill; onOpenBill: (bill: Bill) => void }) {
   return (
-    <Pressable onPress={() => onOpenBill(bill)} style={styles.personRow}>
+    <Pressable onPress={() => onOpenBill(bill)} accessibilityRole="button" accessibilityLabel={`Open bill ${bill.billNumber}`} style={styles.personRow}>
       <View style={styles.billIcon}><Text style={styles.billIconText}>{bill.billNumber.split('-')[0]}</Text></View>
       <View style={styles.flex}>
         <View style={styles.split}>
@@ -373,7 +441,7 @@ function BillDetailScreen({
         <Text style={styles.eyebrow}>{bill.jurisdiction} · {bill.chamber}</Text>
         <Text style={styles.title}>{bill.billNumber}</Text>
         <Text style={styles.rowTitle}>{bill.title}</Text>
-        <Text style={styles.body}>{bill.description}</Text>
+        <Text style={styles.body}>{redactPrivateDisplayText(bill.description)}</Text>
         <Badge label={bill.status} tone={bill.status === 'Passed' ? 'good' : 'neutral'} />
       </Card>
       <View style={styles.metricRow}>
@@ -536,7 +604,7 @@ function ProfileScreen({ politician, profile, claims }: { politician: Politician
     <View style={styles.stack}>
       <Card>
         <Text style={styles.rowTitle}>Biography</Text>
-        <Text style={styles.body}>{politician.biography}</Text>
+        <Text style={styles.body}>{redactPrivateDisplayText(politician.biography)}</Text>
       </Card>
       {office && (
         <Card>
@@ -557,7 +625,7 @@ function ProfileScreen({ politician, profile, claims }: { politician: Politician
           {warningClaims.slice(0, 3).map((claim) => (
             <View key={claim.id} style={styles.stackSmall}>
               <Badge label={claim.status} tone={claim.publishable ? 'neutral' : 'warn'} />
-              <Text style={styles.body}>{claim.claimText}</Text>
+              <Text style={styles.body}>{redactPrivateDisplayText(claim.claimText)}</Text>
               <Text style={styles.muted}>{claim.claimType.replace(/_/g, ' ')} · {claim.citationCount} citation{claim.citationCount === 1 ? '' : 's'}</Text>
             </View>
           ))}
@@ -608,7 +676,7 @@ function ArticlesScreen() {
             <Badge label={article.tone} tone={article.tone === 'Controversy' ? 'warn' : 'neutral'} />
           </View>
           <Text style={styles.muted}>{article.source} · {article.date}</Text>
-          <Text style={styles.body}>{article.summary}</Text>
+          <Text style={styles.body}>{redactPrivateDisplayText(article.summary)}</Text>
         </Card>
       ))}
     </View>
@@ -706,7 +774,7 @@ function TimelineScreen({ aggregate }: { aggregate: TimelineAggregate | null }) 
             <Badge label={item.publishable ? 'Publishable' : 'Review'} tone={item.publishable ? 'good' : 'warn'} />
           </View>
           <Text style={styles.rowTitle}>{item.title}</Text>
-          {item.description && <Text style={styles.body}>{item.description}</Text>}
+          {item.description && <Text style={styles.body}>{redactPrivateDisplayText(item.description)}</Text>}
           <Text style={styles.muted}>{item.evidenceType.replaceAll('_', ' ')}{item.sourceName ? ` · ${item.sourceName}` : ''}</Text>
           {item.warnings.length > 0 && <Text style={styles.warnInline}>{item.warnings.join(' · ')}</Text>}
         </Card>
@@ -765,20 +833,21 @@ function CompareColumn({ person }: { person: Politician }) {
   );
 }
 
-function SavedScreen({ savedIds, onSelect }: { savedIds: string[]; onSelect: (person: Politician) => void }) {
-  const saved = politicians.filter((person) => savedIds.includes(person.id));
+function SavedScreen({ records, onSelect }: { records: SavedPoliticianSnapshot[]; onSelect: (person: Politician) => void }) {
   return (
     <View style={styles.stack}>
-      {saved.map((person) => (
-        <Pressable key={person.id} onPress={() => onSelect(person)} style={styles.personRow}>
-          <Avatar person={person} />
+      {records.map(({ politician, savedAt, latestActivity, dataGaps }) => (
+        <Pressable key={politician.id} onPress={() => onSelect(politician)} style={styles.personRow}>
+          <Avatar person={politician} />
           <View style={styles.flex}>
-            <Text style={styles.rowTitle}>{person.firstName} {person.lastName}</Text>
-            <Text style={styles.rowSub}>{person.office} · {person.state}</Text>
+            <Text style={styles.rowTitle}>{politician.firstName} {politician.lastName}</Text>
+            <Text style={styles.rowSub}>{politician.office} · {politician.state}</Text>
+            <Text style={styles.muted}>Saved {formatDisplayDate(savedAt)} · Latest activity {formatDisplayDate(latestActivity)}</Text>
+            <Text style={styles.muted}>Data gaps: {dataGaps.join(', ')}</Text>
           </View>
         </Pressable>
       ))}
-      {saved.length === 0 && <Text style={styles.body}>No saved politicians yet.</Text>}
+      {records.length === 0 && <Text style={styles.body}>No saved politicians yet.</Text>}
     </View>
   );
 }
@@ -861,6 +930,14 @@ function formatDisplayDate(value?: string | [number, number, number]): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed);
+}
+
+function redactPrivateDisplayText(value?: string): string {
+  if (!value) return '';
+  return value
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[redacted email]')
+    .replace(/(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/g, '[redacted phone]')
+    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[redacted ssn]');
 }
 
 function formatDateParts(year: number, month: number, day: number): string {

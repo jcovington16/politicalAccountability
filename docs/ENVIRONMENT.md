@@ -37,6 +37,10 @@ Local development uses `.env` for scripts and service configuration. Do not comm
 | `NEWS_SCRAPER_ENABLED` | Media ingestion | Optional | `false` | Enables explicit public article URL scraping. Keep off unless sources are reviewed. |
 | `NEWS_SCRAPER_URLS` | Media ingestion | Optional | unset | Comma-separated `url|Source Name` article URLs. No bulk crawling. |
 | `NEWS_SCRAPER_MAX_PAGES` | Media ingestion | Optional | `10` | Max explicit article pages per run. |
+| `PUBLIC_SEARCH_RATE_LIMIT_PER_MINUTE` | API abuse prevention | Optional | `60` | Per-client public search request limit. |
+| `RATE_LIMIT_ENABLED` | API abuse prevention | Optional | `true` | Enables in-memory public search rate limits. |
+| `INGEST_HTTP_MAX_ATTEMPTS` | Ingestion backoff | Optional | `3` | Max attempts for transient provider `429` and `5xx` responses. |
+| `INGEST_HTTP_BACKOFF_MS` | Ingestion backoff | Optional | `1000` | Initial backoff delay for transient provider responses. |
 | `LIQUIBASE_IMAGE` | Liquibase scripts | Optional | `liquibase:4.33` | Docker fallback image. |
 | `LIQUIBASE_DOCKER_NETWORK` | Liquibase scripts | CI | unset | Use `host` in GitHub Actions service-container validation. |
 | `NVD_API_KEY` | CI security scan | Recommended | unset | Optional GitHub secret for OWASP Dependency-Check. Reduces NVD throttling and 403 failures. |
