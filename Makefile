@@ -1,6 +1,6 @@
 # Political Accountability App - Development Makefile
 
-.PHONY: help build test clean run deploy health-check api-smoke load-smoke docker-build docker-run db-status db-migrate db-validate db-history db-rollback db-new db-tag ingest-local ingest-dry-run ingest-congress-bills ingest-congress-members ingest-govinfo-packages ingest-state-civic ingest-federal-executives ingest-media kafka-raw-log dashboard-install dashboard-dev dashboard-build mobile-install mobile-start mobile-typecheck
+.PHONY: help build test clean run deploy health-check api-smoke load-smoke release-check launch-monitor docker-build docker-run db-status db-migrate db-validate db-history db-rollback db-new db-tag ingest-local ingest-dry-run ingest-congress-bills ingest-congress-members ingest-govinfo-packages ingest-state-civic ingest-federal-executives ingest-media refresh-live-data profile-completeness kafka-health kafka-recover kafka-raw-log dashboard-install dashboard-dev dashboard-build mobile-install mobile-start mobile-typecheck
 
 # Default target
 help:
@@ -26,6 +26,10 @@ help:
 	@echo "  ingest-state-civic - Fetch Open States and Google Civic records"
 	@echo "  ingest-federal-executives - Seed recent U.S. President profiles"
 	@echo "  ingest-media - Fetch public media discovery records from GDELT, RSS, and YouTube"
+	@echo "  refresh-live-data - Refresh primary official sources and normalize into PostgreSQL"
+	@echo "  profile-completeness names='Name One,Name Two' - Report stored profile gaps"
+	@echo "  kafka-health - Verify Kafka metadata, produce, and consume"
+	@echo "  kafka-recover - Reset only local Kafka/ZooKeeper data and restart them"
 	@echo "  kafka-raw-log - Print raw-content Kafka events"
 	@echo "  dashboard-dev  - Run React dashboard"
 	@echo "  dashboard-build - Build React dashboard"
@@ -43,6 +47,8 @@ help:
 	@echo "  health-check   - Run health checks"
 	@echo "  api-smoke      - Run public/admin API smoke checks"
 	@echo "  load-smoke     - Run small search load smoke test"
+	@echo "  release-check  - Run release-candidate checks"
+	@echo "  launch-monitor - Print launch monitoring snapshot"
 	@echo ""
 	@echo "Quality:"
 	@echo "  security-scan  - Run security vulnerability scan"
@@ -137,6 +143,12 @@ api-smoke:
 load-smoke:
 	./scripts/search-load-smoke.sh
 
+release-check:
+	./scripts/release-candidate-check.sh
+
+launch-monitor:
+	./scripts/launch-monitor.sh
+
 # Quality targets
 security-scan:
 	@echo "🔒 Running security vulnerability scan..."
@@ -215,6 +227,23 @@ ingest-govinfo-packages:
 
 kafka-raw-log:
 	@set -a; [ ! -f .env ] || . ./.env; set +a; ./gradlew :ingestion-service:runRawContentLogger
+
+kafka-health:
+	./scripts/kafka-health.sh
+
+kafka-recover:
+	@echo "Resetting local Kafka/ZooKeeper metadata. PostgreSQL and application data are preserved."
+	docker compose stop api-gateway kafka zookeeper
+	docker compose rm -sfv kafka zookeeper
+	docker volume rm -f political-accountability-app_kafka_data political-accountability-app_zookeeper_data political-accountability-app_zookeeper_logs
+	docker compose up -d zookeeper kafka
+
+refresh-live-data:
+	./scripts/refresh-live-data.sh
+
+profile-completeness:
+	@test -n "$(names)" || (echo "Usage: make profile-completeness names='Name One,Name Two'" && exit 1)
+	@set -a; [ ! -f .env ] || . ./.env; set +a; node scripts/profile-completeness-report.mjs --names "$(names)"
 
 ingest-official-normalized:
 	@set -a; [ ! -f .env ] || . ./.env; set +a; ./gradlew :ingestion-service:runOfficialDataNormalization

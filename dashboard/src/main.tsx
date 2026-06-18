@@ -16,18 +16,7 @@ import {
   Vote,
 } from 'lucide-react';
 import { ApiError, getBillDetail, getPoliticianClaims, getPoliticianProfile, getPoliticianTimeline, getPublicStatements, globalSearch, searchBills as searchBillsApi, searchPoliticians } from './api';
-import {
-  accomplishments,
-  controversies,
-  sampleBillVotes,
-  sampleBills,
-  sampleCitations,
-  samplePoliticians,
-  sampleStatements,
-  sampleVotes,
-  securityControls,
-  timeline,
-} from './mockData';
+import { securityControls } from './mockData';
 import type { Bill, BillDetail as BillDetailData, BillVote, ClaimRecord, Politician, PoliticianProfile, PublicStatement, SearchResponse, SecurityControl, TimelineAggregate, VotingRecord } from './types';
 import './styles.css';
 
@@ -54,27 +43,33 @@ type SavedPoliticianSnapshot = {
   dataGaps: string[];
 };
 const savedStorageKey = 'public-record:saved-politicians:v1';
+const emptyPolitician: Politician = {
+  id: '', firstName: '', lastName: '', party: '', state: '', office: '', startDate: '',
+};
+const emptyBill: Bill = {
+  id: '', billNumber: '', title: '', status: 'Pending', introducedDate: '',
+};
 
 function App() {
   const [view, setView] = useState<View>('search');
   const [activeTab, setActiveTab] = useState<Tab>('Overview');
   const [query, setQuery] = useState('');
   const [billQuery, setBillQuery] = useState('');
-  const [selected, setSelected] = useState<Politician>(samplePoliticians[0]);
+  const [selected, setSelected] = useState<Politician>(emptyPolitician);
   const [selectedProfile, setSelectedProfile] = useState<PoliticianProfile | null>(null);
-  const [profileState, setProfileState] = useState('Using sample profile data');
-  const [selectedBill, setSelectedBill] = useState<Bill>(sampleBills[0]);
+  const [profileState, setProfileState] = useState('Live profile not loaded');
+  const [selectedBill, setSelectedBill] = useState<Bill>(emptyBill);
   const [selectedBillDetail, setSelectedBillDetail] = useState<BillDetailData | null>(null);
   const [publicStatements, setPublicStatements] = useState<PublicStatement[]>([]);
   const [claims, setClaims] = useState<ClaimRecord[]>([]);
   const [timelineAggregate, setTimelineAggregate] = useState<TimelineAggregate | null>(null);
   const [savedRecords, setSavedRecords] = useState<SavedPoliticianSnapshot[]>(() => loadSavedSnapshots());
   const savedIds = savedRecords.map((record) => record.politician.id);
-  const [results, setResults] = useState<Politician[]>(samplePoliticians);
+  const [results, setResults] = useState<Politician[]>([]);
   const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null);
-  const [billResults, setBillResults] = useState<Bill[]>(sampleBills);
-  const [apiState, setApiState] = useState('Using sample dashboard data');
-  const [billApiState, setBillApiState] = useState('Using sample dashboard bill data');
+  const [billResults, setBillResults] = useState<Bill[]>([]);
+  const [apiState, setApiState] = useState('Enter a name to search live records');
+  const [billApiState, setBillApiState] = useState('Enter a bill number, title, sponsor, or topic');
   const latestPoliticianSearch = useRef(0);
   const latestBillSearch = useRef(0);
 
@@ -82,9 +77,9 @@ function App() {
     const trimmed = query.trim();
 
     if (!trimmed) {
-      setResults(samplePoliticians);
+      setResults([]);
       setSearchResponse(null);
-      setApiState('Using sample dashboard data');
+      setApiState('Enter a name to search live records');
       return;
     }
 
@@ -99,8 +94,8 @@ function App() {
     const trimmed = billQuery.trim();
 
     if (!trimmed) {
-      setBillResults(sampleBills);
-      setBillApiState('Using sample dashboard bill data');
+      setBillResults([]);
+      setBillApiState('Enter a bill number, title, sponsor, or topic');
       return;
     }
 
@@ -116,9 +111,9 @@ function App() {
     latestPoliticianSearch.current = searchId;
     const trimmed = searchTerm.trim();
     if (!trimmed) {
-      setResults(samplePoliticians);
+      setResults([]);
       setSearchResponse(null);
-      setApiState('Using sample dashboard data');
+      setApiState('Enter a name to search live records');
       setView('search');
       return;
     }
@@ -138,24 +133,20 @@ function App() {
         setApiState('Connected to API');
         setView('search');
       } else {
-        const local = filterSamplePoliticians(trimmed);
-        setResults(local);
-        if (local[0]) setSelected(local[0]);
-        setApiState(local.length > 0 ? 'No API matches, showing sample data' : 'No matches found');
+        setResults([]);
+        setApiState('No live politician matches found');
         setView('search');
       }
     } catch (error) {
       if (searchId !== latestPoliticianSearch.current) return;
-      const local = filterSamplePoliticians(searchTerm);
-      setResults(local);
+      setResults([]);
       setSearchResponse(null);
-      if (local[0]) setSelected(local[0]);
-      setApiState(error instanceof ApiError && error.status === 429 ? 'Search is busy. Please try again in a minute.' : 'API unavailable, filtered sample data');
+      setApiState(error instanceof ApiError && error.status === 429 ? 'Search is busy. Please try again in a minute.' : 'Live API unavailable. No sample records are shown.');
       setView('search');
     }
   }
 
-  const visibleVotes = selectedProfile?.votingRecords.length ? selectedProfile.votingRecords : sampleVotes;
+  const visibleVotes = selectedProfile?.votingRecords ?? [];
   const supported = visibleVotes.filter((vote) => vote.voteType === 'YEA');
   const opposed = visibleVotes.filter((vote) => vote.voteType === 'NAY');
 
@@ -175,7 +166,7 @@ function App() {
         setProfileState('Connected to API profile');
       })
       .catch(() => {
-        setProfileState('API profile unavailable, showing sample profile data');
+        setProfileState('Live profile unavailable. No sample records are shown.');
       });
     void getPublicStatements(politician.id)
       .then(setPublicStatements)
@@ -201,7 +192,7 @@ function App() {
   }
 
   function openBillById(id: string) {
-    const known = billResults.find((bill) => bill.id === id) || sampleBills.find((bill) => bill.id === id);
+    const known = billResults.find((bill) => bill.id === id);
     if (known) {
       openBill(known);
       return;
@@ -252,8 +243,8 @@ function App() {
     setView('bills');
 
     if (!trimmed) {
-      setBillResults(sampleBills);
-      setBillApiState('Using sample dashboard bill data');
+      setBillResults([]);
+      setBillApiState('Enter a bill number, title, sponsor, or topic');
       return;
     }
 
@@ -267,17 +258,13 @@ function App() {
         setBillApiState('Connected to API');
         setSelectedBill(found[0]);
       } else {
-        const local = filterSampleBills(trimmed);
-        setBillResults(local);
-        setBillApiState(local.length > 0 ? 'No API matches, showing sample bill data' : 'No bill matches found');
-        if (local[0]) setSelectedBill(local[0]);
+        setBillResults([]);
+        setBillApiState('No live bill matches found');
       }
     } catch (error) {
       if (searchId !== latestBillSearch.current) return;
-      const local = filterSampleBills(trimmed);
-      setBillResults(local);
-      setBillApiState(error instanceof ApiError && error.status === 429 ? 'Bill search is busy. Please try again in a minute.' : 'API unavailable, filtered sample bill data');
-      if (local[0]) setSelectedBill(local[0]);
+      setBillResults([]);
+      setBillApiState(error instanceof ApiError && error.status === 429 ? 'Bill search is busy. Please try again in a minute.' : 'Live API unavailable. No sample records are shown.');
     }
   }
 
@@ -309,7 +296,7 @@ function App() {
                 onChange={(event) => {
                   const value = event.target.value;
                   setQuery(value);
-                  setApiState(value.trim() ? 'Searching live politician data...' : 'Using sample dashboard data');
+                  setApiState(value.trim() ? 'Searching live politician data...' : 'Enter a name to search live records');
                 }}
               onFocus={() => setView('search')}
               onKeyDown={(event) => {
@@ -336,7 +323,7 @@ function App() {
                 onChange={(event) => {
                   const value = event.target.value;
                   setBillQuery(value);
-                  setBillApiState(value.trim() ? 'Searching live bill data...' : 'Using sample dashboard bill data');
+                  setBillApiState(value.trim() ? 'Searching live bill data...' : 'Enter a bill number, title, sponsor, or topic');
                 }}
                 onFocus={() => setView('bills')}
                 onKeyDown={(event) => {
@@ -424,37 +411,10 @@ function App() {
   );
 }
 
-function filterSamplePoliticians(query: string): Politician[] {
-  const value = query.trim().toLowerCase();
-  if (!value) return samplePoliticians;
-  return samplePoliticians.filter((politician) =>
-    `${politician.firstName} ${politician.lastName} ${politician.party} ${politician.state} ${politician.office}`
-      .toLowerCase()
-      .includes(value),
-  );
-}
-
-function filterSampleBills(query: string): Bill[] {
-  const value = query.trim().toLowerCase();
-  if (!value) return sampleBills;
-  return sampleBills.filter((bill) =>
-    `${bill.billNumber} ${bill.title} ${bill.description ?? ''} ${bill.sponsor ?? ''} ${bill.status}`
-      .toLowerCase()
-      .includes(value),
-  );
-}
-
 function loadSavedSnapshots(): SavedPoliticianSnapshot[] {
   try {
     const raw = window.localStorage.getItem(savedStorageKey);
-    if (!raw) {
-      return [{
-        politician: samplePoliticians[0],
-        savedAt: new Date().toISOString(),
-        latestActivity: undefined,
-        dataGaps: ['Live profile not refreshed yet'],
-      }];
-    }
+    if (!raw) return [];
     const parsed = JSON.parse(raw) as SavedPoliticianSnapshot[];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -505,9 +465,9 @@ function Header({
         <p>{politician.office}</p>
       </div>
       <div className="header-metrics">
-        <Metric label="Trust avg" value={trust ? `${Math.round(trust.averageScore * 100)}%` : '82%'} tone="good" />
-        <Metric label="Citations" value={String(trust?.citationCount ?? 41)} />
-        <Metric label="Open risks" value={String(trust?.openRiskCount ?? 3)} tone="warn" />
+        <Metric label="Trust avg" value={trust ? `${Math.round(trust.averageScore * 100)}%` : '—'} tone="good" />
+        <Metric label="Citations" value={String(trust?.citationCount ?? 0)} />
+        <Metric label="Open risks" value={String(trust?.openRiskCount ?? 0)} tone="warn" />
         <button type="button" className="primary-action" onClick={onToggleSaved}>{saved ? 'Saved' : 'Save'}</button>
       </div>
       <p className="profile-state">{profileState}</p>
@@ -643,11 +603,11 @@ function Overview({ politician, profile }: { politician: Politician; profile: Po
       title: item.title,
       category: item.category,
     }))
-    : timeline.slice(0, 4);
+    : [];
   return (
     <section className="grid two">
       <Panel title="Biography" icon={<UserRound size={18} />}>
-        <p className="body-copy">{redactPrivateDisplayText(politician.biography)}</p>
+        <p className="body-copy">{redactPrivateDisplayText(politician.biography) || 'No official biography has been ingested.'}</p>
         <div className="fact-grid">
           <Fact label="Office" value={politician.office} />
           <Fact label="State" value={politician.state} />
@@ -659,18 +619,16 @@ function Overview({ politician, profile }: { politician: Politician; profile: Po
       </Panel>
 
       <Panel title="Accountability Snapshot" icon={<BadgeCheck size={18} />}>
-        <div className="score-stack">
-          <ScoreRow label="Verified records" value={91} />
-          <ScoreRow label="Direct quotes" value={84} />
-          <ScoreRow label="Unresolved claims" value={28} inverse />
-          <ScoreRow label="Opinion reliance" value={22} inverse />
+        <div className="fact-grid">
+          <Fact label="Evidence records" value={String(profile?.trustSummary.records.length ?? 0)} />
+          <Fact label="Source citations" value={String(profile?.trustSummary.citationCount ?? 0)} />
+          <Fact label="Open review risks" value={String(profile?.trustSummary.openRiskCount ?? 0)} />
+          <Fact label="Average trust" value={profile ? `${Math.round(profile.trustSummary.averageScore * 100)}%` : 'Not scored'} />
         </div>
       </Panel>
 
       <Panel title="Accomplishments" icon={<Gavel size={18} />}>
-        <ul className="clean-list">
-          {accomplishments.map((item) => <li key={item}>{item}</li>)}
-        </ul>
+        <p className="body-copy">No reviewed accomplishment records are available. The app does not infer accomplishments from unrelated activity.</p>
       </Panel>
 
       <Panel title="Recent Activity" icon={<CalendarClock size={18} />}>
@@ -682,6 +640,7 @@ function Overview({ politician, profile }: { politician: Politician; profile: Po
               <span>{item.category}</span>
             </div>
           ))}
+          {recentActivity.length === 0 && <p className="body-copy">No live activity records have been ingested.</p>}
         </div>
       </Panel>
     </section>
@@ -709,7 +668,7 @@ function Votes({
       <Panel title="Voting Record" icon={<Vote size={18} />}>
         <div className="card-list">
           {votes.map((vote) => {
-            const bill = sampleBills.find((item) => item.id === vote.billId) ?? {
+            const bill = {
               id: vote.billId,
               billNumber: vote.billNumber ?? 'Unknown',
               title: vote.billTitle ?? 'Unknown bill',
@@ -734,8 +693,8 @@ function Votes({
 
 function Bills({ profile, onOpenBill }: { profile: PoliticianProfile | null; onOpenBill: (bill: Bill) => void }) {
   const grouped = useMemo(() => ({
-    supported: profile?.billsSupported.length ? profile.billsSupported : sampleBills.filter((bill) => sampleVotes.some((vote) => vote.billId === bill.id && vote.voteType === 'YEA')),
-    opposed: profile?.billsOpposed.length ? profile.billsOpposed : sampleBills.filter((bill) => sampleVotes.some((vote) => vote.billId === bill.id && vote.voteType === 'NAY')),
+    supported: profile?.billsSupported ?? [],
+    opposed: profile?.billsOpposed ?? [],
     sponsored: profile?.billsSponsored ?? [],
   }), [profile]);
 
@@ -786,8 +745,7 @@ function BillDetail({
   onBack: () => void;
   onOpenPolitician: (politician: Politician) => void;
 }) {
-  const votes = detail?.votes.length
-    ? detail.votes.map((vote) => ({
+  const votes = (detail?.votes ?? []).map((vote) => ({
       id: vote.id,
       politicianId: vote.politicianId,
       politicianName: vote.politicianName ?? 'Unknown politician',
@@ -795,8 +753,7 @@ function BillDetail({
       state: vote.state ?? 'Unknown',
       voteType: vote.voteType,
       voteDate: formatDisplayDate(vote.voteDate),
-    }))
-    : sampleBillVotes[bill.id] ?? [];
+    }));
   const yea = votes.filter((vote) => vote.voteType === 'YEA');
   const nay = votes.filter((vote) => vote.voteType === 'NAY');
   const abstain = votes.filter((vote) => vote.voteType === 'ABSTAIN');
@@ -904,9 +861,18 @@ function BillVoteList({ votes, onOpenPolitician }: { votes: BillVote[]; onOpenPo
   return (
     <div className="card-list">
       {votes.map((vote) => {
-        const politician = samplePoliticians.find((item) => item.id === vote.politicianId);
+        const names = vote.politicianName.trim().split(/\s+/);
+        const politician: Politician = {
+          id: vote.politicianId,
+          firstName: names[0] ?? '',
+          lastName: names.slice(1).join(' '),
+          party: vote.party,
+          state: vote.state,
+          office: 'Public official',
+          startDate: '',
+        };
         return (
-          <button key={vote.id} type="button" className="record-card" onClick={() => politician && onOpenPolitician(politician)}>
+          <button key={vote.id} type="button" className="record-card" onClick={() => onOpenPolitician(politician)}>
             <span className="small-avatar">{vote.politicianName.split(' ').map((part) => part[0]).join('').slice(0, 2)}</span>
             <div>
               <strong>{vote.politicianName}</strong>
@@ -945,23 +911,7 @@ function Statements({ statements }: { statements: PublicStatement[] }) {
     );
   }
 
-  return (
-    <section className="stack">
-      {sampleStatements.map((statement) => (
-        <Panel key={statement.id} title={statement.title} icon={<Newspaper size={18} />}>
-          <div className="statement">
-            <div>
-              <span>{statement.type}</span>
-              <time>{statement.date}</time>
-            </div>
-            <blockquote>{redactPrivateDisplayText(statement.excerpt)}</blockquote>
-            <TrustBadge score={statement.trust.score} confidence={statement.trust.confidenceLevel} />
-          </div>
-        </Panel>
-      ))}
-      <p className="body-copy">Showing sample statements until public statement records are imported for this politician.</p>
-    </section>
-  );
+  return <p className="body-copy">No live public statements have been ingested for this politician.</p>;
 }
 
 function Controversies({ claims }: { claims: ClaimRecord[] }) {
@@ -999,20 +949,7 @@ function Controversies({ claims }: { claims: ClaimRecord[] }) {
     );
   }
 
-  return (
-    <section className="grid two">
-      {controversies.map((item) => (
-        <Panel key={item.title} title={item.title} icon={<AlertTriangle size={18} />}>
-          <div className="risk-row">
-            <span className={`risk ${item.risk.toLowerCase()}`}>{item.risk}</span>
-            <span>{item.status}</span>
-          </div>
-          <p className="body-copy">{item.summary}</p>
-        </Panel>
-      ))}
-      <p className="body-copy">Showing sample controversies until claim records are imported for this politician.</p>
-    </section>
-  );
+  return <p className="body-copy">No reviewed live claim records are available. Missing data is not evidence that no controversies exist.</p>;
 }
 
 function Citations({ profile }: { profile: PoliticianProfile | null }) {
@@ -1034,20 +971,7 @@ function Citations({ profile }: { profile: PoliticianProfile | null }) {
     );
   }
 
-  return (
-    <Panel title="Source Citations" icon={<Link size={18} />}>
-      <DataTable
-        columns={['Date', 'Source', 'Quality', 'Used for']}
-        rows={sampleCitations.map((citation) => [
-          citation.date,
-          citation.source,
-          citation.sourceQuality,
-          citation.citedBy,
-        ])}
-      />
-      <p className="body-copy">Showing sample citations until live source citations are attached to this profile.</p>
-    </Panel>
-  );
+  return <Panel title="Source Citations" icon={<Link size={18} />}><p className="body-copy">No live source citations are attached to this profile.</p></Panel>;
 }
 
 function Timeline({ aggregate }: { aggregate: TimelineAggregate | null }) {
@@ -1104,24 +1028,7 @@ function Timeline({ aggregate }: { aggregate: TimelineAggregate | null }) {
     );
   }
 
-  return (
-    <Panel title="Timeline of Activity" icon={<CalendarClock size={18} />}>
-      <div className="timeline">
-        {timeline.map((item) => (
-          <article key={item.id}>
-            <time>{item.date}</time>
-            <div>
-              <span>{item.category}</span>
-              <h3>{item.title}</h3>
-              <p>{item.description}</p>
-            </div>
-            <span className={`risk ${item.risk.toLowerCase()}`}>{item.risk}</span>
-          </article>
-        ))}
-      </div>
-      <p className="body-copy">Showing sample timeline until live votes, bills, statements, claims, media, or office records are available.</p>
-    </Panel>
-  );
+  return <Panel title="Timeline of Activity" icon={<CalendarClock size={18} />}><p className="body-copy">No live timeline events have been ingested for this politician.</p></Panel>;
 }
 
 function SecurityArchitecture() {
@@ -1208,27 +1115,6 @@ function redactPrivateDisplayText(value?: string): string {
 function formatDateParts(year: number, month: number, day: number): string {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(
     new Date(Date.UTC(year, month - 1, day, 12)),
-  );
-}
-
-function ScoreRow({ label, value, inverse }: { label: string; value: number; inverse?: boolean }) {
-  const good = inverse ? value < 35 : value > 70;
-  return (
-    <div className="score-row">
-      <span>{label}</span>
-      <div><i style={{ width: `${value}%` }} className={good ? 'good' : 'warn'} /></div>
-      <strong>{value}%</strong>
-    </div>
-  );
-}
-
-function TrustBadge({ score, confidence }: { score: number; confidence: string }) {
-  return (
-    <div className="trust-badge">
-      <ShieldCheck size={16} aria-hidden="true" />
-      <span>{Math.round(score * 100)}%</span>
-      <strong>{confidence}</strong>
-    </div>
   );
 }
 

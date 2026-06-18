@@ -10,7 +10,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { articles, bills, billVotes, citations, politicians, stances, timeline, votes } from './src/data';
 import { ApiError, getBillDetail, getBillVotes, getPoliticianClaims, getPoliticianProfile, getPoliticianTimeline, getPublicStatements, getVotingRecord, searchBills as searchBillsApi, searchPoliticians } from './src/api';
 import type { Bill, BillVote, ClaimRecord, Politician, PublicStatement, TimelineAggregate, VoteRecord } from './src/types';
 import type { BillDetailResponse, PoliticianProfileResponse } from './src/api';
@@ -27,47 +26,41 @@ type SavedPoliticianSnapshot = {
 const mainScreens: MainScreen[] = ['Search', 'Bills', 'Saved'];
 const profileTabs: ProfileTab[] = ['Overview', 'Votes', 'Bills', 'Articles', 'Issues', 'Timeline', 'Compare', 'Citations'];
 const savedStorageKey = 'public-record-mobile:saved-politicians:v1';
+const emptyPolitician: Politician = {
+  id: '', firstName: '', lastName: '', party: '', state: '', office: '', startDate: '',
+};
+const emptyBill: Bill = {
+  id: '', billNumber: '', title: '', status: 'Pending', introducedDate: '',
+};
 
 export default function App() {
   const [screen, setScreen] = useState<MainScreen>('Search');
   const [profileTab, setProfileTab] = useState<ProfileTab>('Overview');
   const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<Politician>(politicians[0]);
-  const [selectedBill, setSelectedBill] = useState<Bill>(bills[0]);
-  const [compare, setCompare] = useState<Politician>(politicians[1]);
+  const [selected, setSelected] = useState<Politician>(emptyPolitician);
+  const [selectedBill, setSelectedBill] = useState<Bill>(emptyBill);
+  const [compare, setCompare] = useState<Politician | null>(null);
   const [savedRecords, setSavedRecords] = useState<SavedPoliticianSnapshot[]>(() => loadSavedSnapshots());
   const saved = savedRecords.map((record) => record.politician.id);
   const [livePoliticians, setLivePoliticians] = useState<Politician[]>([]);
   const [liveBills, setLiveBills] = useState<Bill[]>([]);
   const [profile, setProfile] = useState<PoliticianProfileResponse | null>(null);
-  const [profileVotes, setProfileVotes] = useState<VoteRecord[]>(votes);
+  const [profileVotes, setProfileVotes] = useState<VoteRecord[]>([]);
   const [profileStatements, setProfileStatements] = useState<PublicStatement[]>([]);
   const [profileClaims, setProfileClaims] = useState<ClaimRecord[]>([]);
   const [profileTimeline, setProfileTimeline] = useState<TimelineAggregate | null>(null);
   const [selectedBillDetail, setSelectedBillDetail] = useState<BillDetailResponse | null>(null);
   const [selectedBillVotes, setSelectedBillVotes] = useState<BillVote[]>([]);
-  const [dataState, setDataState] = useState('Using sample data');
+  const [dataState, setDataState] = useState('Enter a name to search live records');
 
   const results = useMemo(() => {
-    const value = query.trim().toLowerCase();
-    if (!value) return politicians;
-    if (livePoliticians.length > 0) return livePoliticians;
-    return politicians.filter((person) =>
-      `${person.firstName} ${person.lastName} ${person.party} ${person.state} ${person.office}`
-        .toLowerCase()
-        .includes(value),
-    );
+    if (!query.trim()) return [];
+    return livePoliticians;
   }, [query, livePoliticians]);
 
   const billResults = useMemo(() => {
-    const value = query.trim().toLowerCase();
-    if (!value) return bills;
-    if (liveBills.length > 0) return liveBills;
-    return bills.filter((bill) =>
-      `${bill.billNumber} ${bill.title} ${bill.description} ${bill.sponsor} ${bill.status}`
-        .toLowerCase()
-        .includes(value),
-    );
+    if (!query.trim()) return [];
+    return liveBills;
   }, [query, liveBills]);
 
   useEffect(() => {
@@ -79,7 +72,7 @@ export default function App() {
     if (!value) {
       setLivePoliticians([]);
       setLiveBills([]);
-      setDataState('Using sample data');
+      setDataState('Enter a name or bill to search live records');
       return;
     }
 
@@ -89,7 +82,7 @@ export default function App() {
           setLivePoliticians(items);
           setDataState(items.length > 0 ? 'Connected to API' : 'No API politician matches');
         })
-        .catch((error) => setDataState(error instanceof ApiError && error.status === 429 ? 'Search is busy. Please try again in a minute.' : 'API unavailable, using sample data'));
+        .catch((error) => setDataState(error instanceof ApiError && error.status === 429 ? 'Search is busy. Please try again in a minute.' : 'Live API unavailable. No sample records are shown.'));
 
       void searchBillsApi(value)
         .then(setLiveBills)
@@ -102,7 +95,7 @@ export default function App() {
   function openPolitician(person: Politician) {
     setSelected(person);
     setProfile(null);
-    setProfileVotes(votes);
+    setProfileVotes([]);
     setProfileStatements([]);
     setProfileClaims([]);
     setProfileTimeline(null);
@@ -113,14 +106,14 @@ export default function App() {
       .then((nextProfile) => {
         setProfile(nextProfile);
         setSelected(nextProfile.politician);
-        setProfileVotes(nextProfile.votingRecords.length > 0 ? nextProfile.votingRecords : votes);
+        setProfileVotes(nextProfile.votingRecords);
         setDataState('Connected to API profile');
       })
       .catch(() => {
         void getVotingRecord(person.id)
-          .then((items) => setProfileVotes(items.length > 0 ? items : votes))
-          .catch(() => setProfileVotes(votes));
-        setDataState('API profile unavailable, using sample profile');
+          .then(setProfileVotes)
+          .catch(() => setProfileVotes([]));
+        setDataState('Live profile unavailable. No sample records are shown.');
       });
     void getPublicStatements(person.id)
       .then(setProfileStatements)
@@ -136,19 +129,19 @@ export default function App() {
   function openBill(bill: Bill) {
     setSelectedBill(bill);
     setSelectedBillDetail(null);
-    setSelectedBillVotes(billVotes[bill.id] ?? []);
+    setSelectedBillVotes([]);
     setScreen('BillDetail');
 
     void getBillDetail(bill.id)
       .then((detail) => {
         setSelectedBill(detail.bill);
         setSelectedBillDetail(detail);
-        setSelectedBillVotes(detail.votes.length > 0 ? detail.votes : billVotes[bill.id] ?? []);
+        setSelectedBillVotes(detail.votes);
       })
       .catch(() => {
         void getBillVotes(bill.id)
-          .then((items) => setSelectedBillVotes(items.length > 0 ? items : billVotes[bill.id] ?? []))
-          .catch(() => setSelectedBillVotes(billVotes[bill.id] ?? []));
+          .then(setSelectedBillVotes)
+          .catch(() => setSelectedBillVotes([]));
       });
   }
 
@@ -209,6 +202,7 @@ export default function App() {
             setActiveTab={setProfileTab}
             compare={compare}
             setCompare={setCompare}
+            compareCandidates={[...livePoliticians, ...savedRecords.map((record) => record.politician)]}
             onBack={() => setScreen('Search')}
             onOpenBill={openBill}
           />
@@ -323,22 +317,10 @@ function SearchScreen({
 }
 
 function loadSavedSnapshots(): SavedPoliticianSnapshot[] {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') {
-    return [{
-      politician: politicians[0],
-      savedAt: new Date().toISOString(),
-      dataGaps: ['Live profile not refreshed yet'],
-    }];
-  }
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return [];
   try {
     const raw = window.localStorage.getItem(savedStorageKey);
-    if (!raw) {
-      return [{
-        politician: politicians[0],
-        savedAt: new Date().toISOString(),
-        dataGaps: ['Live profile not refreshed yet'],
-      }];
-    }
+    if (!raw) return [];
     const parsed = JSON.parse(raw) as SavedPoliticianSnapshot[];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -426,7 +408,7 @@ function BillDetailScreen({
   onBack: () => void;
   onOpenPolitician: (person: Politician) => void;
 }) {
-  const votesForBill = votes.length > 0 ? votes : billVotes[bill.id] ?? [];
+  const votesForBill = votes;
   const yea = votesForBill.filter((vote) => vote.voteType === 'YEA');
   const nay = votesForBill.filter((vote) => vote.voteType === 'NAY');
   const abstain = votesForBill.filter((vote) => vote.voteType === 'ABSTAIN');
@@ -488,10 +470,19 @@ function BillVoteRow({
   };
   onOpenPolitician: (person: Politician) => void;
 }) {
-  const politician = politicians.find((person) => person.id === vote.politicianId);
+  const names = vote.politicianName.trim().split(/\s+/);
+  const politician: Politician = {
+    id: vote.politicianId,
+    firstName: names[0] ?? '',
+    lastName: names.slice(1).join(' '),
+    party: vote.party,
+    state: vote.state,
+    office: 'Public official',
+    startDate: '',
+  };
 
   return (
-    <Pressable disabled={!politician} onPress={() => politician && onOpenPolitician(politician)}>
+    <Pressable onPress={() => onOpenPolitician(politician)}>
     <Card>
       <View style={styles.split}>
         <Text style={styles.rowTitle}>{vote.politicianName}</Text>
@@ -516,6 +507,7 @@ function PoliticianPage({
   setActiveTab,
   compare,
   setCompare,
+  compareCandidates,
   onBack,
   onOpenBill,
 }: {
@@ -529,8 +521,9 @@ function PoliticianPage({
   onSave: () => void;
   activeTab: ProfileTab;
   setActiveTab: (tab: ProfileTab) => void;
-  compare: Politician;
-  setCompare: (person: Politician) => void;
+  compare: Politician | null;
+  setCompare: (person: Politician | null) => void;
+  compareCandidates: Politician[];
   onBack: () => void;
   onOpenBill: (bill: Bill) => void;
 }) {
@@ -554,10 +547,10 @@ function PoliticianPage({
       {activeTab === 'Overview' && <ProfileScreen politician={politician} profile={profile} claims={claims} />}
       {activeTab === 'Votes' && <VotingScreen votes={votes} onOpenBill={onOpenBill} />}
       {activeTab === 'Bills' && <BillsScreen profile={profile} votes={votes} onOpenBill={onOpenBill} />}
-      {activeTab === 'Articles' && <ArticlesScreen />}
+      {activeTab === 'Articles' && <ArticlesScreen profile={profile} />}
       {activeTab === 'Issues' && <IssueScreen statements={statements} />}
       {activeTab === 'Timeline' && <TimelineScreen aggregate={timelineAggregate} />}
-      {activeTab === 'Compare' && <CompareScreen selected={politician} compare={compare} setCompare={setCompare} />}
+      {activeTab === 'Compare' && <CompareScreen selected={politician} compare={compare} setCompare={setCompare} candidates={compareCandidates} />}
       {activeTab === 'Citations' && <SourcesScreen profile={profile} />}
     </View>
   );
@@ -586,9 +579,9 @@ function ProfileHeader({
         </View>
       </View>
       <View style={styles.metricRow}>
-        <Metric label="Trust avg" value={trust ? `${Math.round(trust.averageScore * 100)}%` : '82%'} good />
-        <Metric label="Citations" value={`${trust?.citationCount ?? 41}`} />
-        <Metric label="Open risks" value={`${trust?.openRiskCount ?? 3}`} warn />
+        <Metric label="Trust avg" value={trust ? `${Math.round(trust.averageScore * 100)}%` : '—'} good />
+        <Metric label="Citations" value={`${trust?.citationCount ?? 0}`} />
+        <Metric label="Open risks" value={`${trust?.openRiskCount ?? 0}`} warn />
       </View>
       <Pressable onPress={onSave} style={styles.primaryButton}>
         <Text style={styles.primaryButtonText}>{saved ? 'Saved' : 'Save politician'}</Text>
@@ -604,7 +597,7 @@ function ProfileScreen({ politician, profile, claims }: { politician: Politician
     <View style={styles.stack}>
       <Card>
         <Text style={styles.rowTitle}>Biography</Text>
-        <Text style={styles.body}>{redactPrivateDisplayText(politician.biography)}</Text>
+        <Text style={styles.body}>{redactPrivateDisplayText(politician.biography) || 'No official biography has been ingested.'}</Text>
       </Card>
       {office && (
         <Card>
@@ -616,8 +609,8 @@ function ProfileScreen({ politician, profile, claims }: { politician: Politician
 
       <View style={styles.metricRow}>
         <Metric label="Elections" value={`${profile?.elections.length ?? 0}`} />
-        <Metric label="Supported" value={`${profile?.billsSupported.length ?? 2}`} good />
-        <Metric label="Opposed" value={`${profile?.billsOpposed.length ?? 1}`} warn />
+        <Metric label="Supported" value={`${profile?.billsSupported.length ?? 0}`} good />
+        <Metric label="Opposed" value={`${profile?.billsOpposed.length ?? 0}`} warn />
       </View>
       {warningClaims.length > 0 && (
         <Card>
@@ -635,50 +628,48 @@ function ProfileScreen({ politician, profile, claims }: { politician: Politician
   );
 }
 
-function BillsScreen({ profile, votes, onOpenBill }: { profile: PoliticianProfileResponse | null; votes: VoteRecord[]; onOpenBill: (bill: Bill) => void }) {
-  const supportedBills = profile?.billsSupported.length ? profile.billsSupported : votes.filter((vote) => vote.voteType === 'YEA');
-  const opposedBills = profile?.billsOpposed.length ? profile.billsOpposed : votes.filter((vote) => vote.voteType === 'NAY');
+function BillsScreen({ profile, votes: _votes, onOpenBill }: { profile: PoliticianProfileResponse | null; votes: VoteRecord[]; onOpenBill: (bill: Bill) => void }) {
+  const supportedBills = profile?.billsSupported ?? [];
+  const opposedBills = profile?.billsOpposed ?? [];
   return (
     <View style={styles.stack}>
       <Text style={styles.label}>Supported</Text>
-      {supportedBills.map((item) => {
-        const bill = 'billNumber' in item && 'title' in item ? item : bills.find((candidate) => candidate.id === item.billId) ?? bills[0];
-        return (
-        <Pressable key={item.id} onPress={() => onOpenBill(bill)}>
+      {supportedBills.map((bill) => (
+        <Pressable key={bill.id} onPress={() => onOpenBill(bill)}>
         <Card>
           <Text style={styles.rowTitle}>{bill.billNumber}</Text>
           <Text style={styles.body}>{bill.title}</Text>
         </Card>
         </Pressable>
-      );})}
+      ))}
+      {supportedBills.length === 0 && <Text style={styles.body}>No live supported-bill records have been ingested.</Text>}
       <Text style={styles.label}>Opposed</Text>
-      {opposedBills.map((item) => {
-        const bill = 'billNumber' in item && 'title' in item ? item : bills.find((candidate) => candidate.id === item.billId) ?? bills[0];
-        return (
-        <Pressable key={item.id} onPress={() => onOpenBill(bill)}>
+      {opposedBills.map((bill) => (
+        <Pressable key={bill.id} onPress={() => onOpenBill(bill)}>
         <Card>
           <Text style={styles.rowTitle}>{bill.billNumber}</Text>
           <Text style={styles.body}>{bill.title}</Text>
         </Card>
         </Pressable>
-      );})}
+      ))}
+      {opposedBills.length === 0 && <Text style={styles.body}>No live opposed-bill records have been ingested.</Text>}
     </View>
   );
 }
 
-function ArticlesScreen() {
+function ArticlesScreen({ profile }: { profile: PoliticianProfileResponse | null }) {
+  const items = profile?.contentItems ?? [];
   return (
     <View style={styles.stack}>
-      {articles.map((article) => (
-        <Card key={article.id}>
-          <View style={styles.split}>
-            <Text style={styles.rowTitle}>{article.headline}</Text>
-            <Badge label={article.tone} tone={article.tone === 'Controversy' ? 'warn' : 'neutral'} />
-          </View>
-          <Text style={styles.muted}>{article.source} · {article.date}</Text>
-          <Text style={styles.body}>{redactPrivateDisplayText(article.summary)}</Text>
+      {items.map((item) => (
+        <Card key={item.id}>
+          <Text style={styles.rowTitle}>{item.title}</Text>
+          <Text style={styles.muted}>{item.contentType.replaceAll('_', ' ')} · {formatDisplayDate(item.publishedAt)}</Text>
+          {item.textBody && <Text style={styles.body}>{redactPrivateDisplayText(item.textBody)}</Text>}
+          {item.sourceUrl && <Text style={styles.body}>{item.sourceUrl}</Text>}
         </Card>
       ))}
+      {items.length === 0 && <Text style={styles.body}>No live articles or media records have been ingested.</Text>}
     </View>
   );
 }
@@ -695,7 +686,7 @@ function VotingScreen({ votes, onOpenBill }: { votes: VoteRecord[]; onOpenBill: 
         <Metric label="Abstained" value={`${abstained}`} />
       </View>
       {votes.map((vote) => (
-        <Pressable key={vote.id} onPress={() => onOpenBill(bills.find((bill) => bill.id === vote.billId) ?? bills[0])}>
+        <Pressable key={vote.id} onPress={() => onOpenBill({ id: vote.billId, billNumber: vote.billNumber, title: vote.billTitle, status: 'Pending', introducedDate: vote.voteDate })}>
         <Card>
           <View style={styles.split}>
             <Text style={styles.rowTitle}>{vote.billNumber}</Text>
@@ -706,6 +697,7 @@ function VotingScreen({ votes, onOpenBill }: { votes: VoteRecord[]; onOpenBill: 
         </Card>
         </Pressable>
       ))}
+      {votes.length === 0 && <Text style={styles.body}>No live voting records have been ingested.</Text>}
     </View>
   );
 }
@@ -723,16 +715,7 @@ function IssueScreen({ statements }: { statements: PublicStatement[] }) {
           <Text style={styles.muted}>{statement.venue ?? 'Unknown venue'} · {statement.statementDate}</Text>
         </Card>
       ))}
-      {stances.map((stance) => (
-        <Card key={stance.issue}>
-          <View style={styles.split}>
-            <Text style={styles.rowTitle}>{stance.issue}</Text>
-            <Badge label={stance.confidence} tone={stance.confidence === 'High' ? 'good' : 'neutral'} />
-          </View>
-          <Text style={styles.body}>{stance.stance}</Text>
-          <Text style={styles.muted}>{stance.basis}</Text>
-        </Card>
-      ))}
+      {statements.length === 0 && <Text style={styles.body}>No live public statements have been ingested.</Text>}
     </View>
   );
 }
@@ -767,7 +750,7 @@ function TimelineScreen({ aggregate }: { aggregate: TimelineAggregate | null }) 
           ))}
         </View>
       )}
-      {liveItems.length > 0 ? visibleItems.map((item) => (
+      {visibleItems.map((item) => (
         <Card key={item.id}>
           <View style={styles.split}>
             <Text style={styles.eyebrow}>{formatDisplayDate(item.date)} · {item.category}</Text>
@@ -778,14 +761,8 @@ function TimelineScreen({ aggregate }: { aggregate: TimelineAggregate | null }) 
           <Text style={styles.muted}>{item.evidenceType.replaceAll('_', ' ')}{item.sourceName ? ` · ${item.sourceName}` : ''}</Text>
           {item.warnings.length > 0 && <Text style={styles.warnInline}>{item.warnings.join(' · ')}</Text>}
         </Card>
-      )) : timeline.map((item) => (
-        <Card key={item.id}>
-          <Text style={styles.eyebrow}>{item.date} · {item.category}</Text>
-          <Text style={styles.rowTitle}>{item.title}</Text>
-          <Text style={styles.body}>{item.detail}</Text>
-          <Text style={styles.muted}>Sample timeline shown until live records exist for this politician.</Text>
-        </Card>
       ))}
+      {liveItems.length === 0 && <Text style={styles.body}>No live timeline events have been ingested.</Text>}
     </View>
   );
 }
@@ -794,29 +771,36 @@ function CompareScreen({
   selected,
   compare,
   setCompare,
+  candidates,
 }: {
   selected: Politician;
-  compare: Politician;
-  setCompare: (person: Politician) => void;
+  compare: Politician | null;
+  setCompare: (person: Politician | null) => void;
+  candidates: Politician[];
 }) {
+  const uniqueCandidates = candidates.filter((person, index, all) =>
+    person.id !== selected.id && all.findIndex((candidate) => candidate.id === person.id) === index,
+  );
   return (
     <View style={styles.stack}>
       <Text style={styles.label}>Compare with</Text>
       <View style={styles.optionRow}>
-        {politicians.map((person) => (
+        {uniqueCandidates.map((person) => (
           <Pressable
             key={person.id}
             onPress={() => setCompare(person)}
-            style={[styles.compareChoice, compare.id === person.id && styles.compareChoiceActive]}
+            style={[styles.compareChoice, compare?.id === person.id && styles.compareChoiceActive]}
           >
             <Text style={styles.compareText}>{person.firstName} {person.lastName}</Text>
           </Pressable>
         ))}
       </View>
-      <View style={styles.compareGrid}>
-        <CompareColumn person={selected} />
-        <CompareColumn person={compare} />
-      </View>
+      {compare ? (
+        <View style={styles.compareGrid}>
+          <CompareColumn person={selected} />
+          <CompareColumn person={compare} />
+        </View>
+      ) : <Text style={styles.body}>Search for or save another live politician to compare.</Text>}
     </View>
   );
 }
@@ -828,7 +812,6 @@ function CompareColumn({ person }: { person: Politician }) {
       <Text style={styles.rowTitle}>{person.firstName} {person.lastName}</Text>
       <Text style={styles.muted}>{person.party} · {person.state}</Text>
       <Text style={styles.body}>{person.office}</Text>
-      <Metric label="Trust avg" value={person.id.endsWith('0') ? '82%' : '76%'} good />
     </Card>
   );
 }
@@ -862,7 +845,7 @@ function SourcesScreen({ profile }: { profile: PoliticianProfileResponse | null 
           Verified facts, quotes, votes, allegations, opinion, and unresolved claims are separated before display.
         </Text>
       </Card>
-      {liveCitations.length > 0 ? liveCitations.map((citation) => (
+      {liveCitations.map((citation) => (
         <Card key={citation.id}>
           <View style={styles.split}>
             <Text style={styles.rowTitle}>{citation.sourceName ?? 'Unknown source'}</Text>
@@ -871,16 +854,8 @@ function SourcesScreen({ profile }: { profile: PoliticianProfileResponse | null 
           <Text style={styles.muted}>{formatDisplayDate(citation.publishedAt ?? citation.retrievedAt)} · {citation.citationType}</Text>
           <Text style={styles.body}>{citation.url}</Text>
         </Card>
-      )) : citations.map((citation) => (
-        <Card key={citation.id}>
-          <View style={styles.split}>
-            <Text style={styles.rowTitle}>{citation.source}</Text>
-            <Badge label={citation.quality} tone="good" />
-          </View>
-          <Text style={styles.muted}>{citation.date}</Text>
-          <Text style={styles.body}>{citation.url}</Text>
-        </Card>
       ))}
+      {liveCitations.length === 0 && <Text style={styles.body}>No live source citations are attached to this profile.</Text>}
     </View>
   );
 }

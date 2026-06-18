@@ -13,7 +13,7 @@ The app should show what was said, voted on, sponsored, opposed, reported, cited
 
 ## Current Status
 
-This is an early-stage MVP with a real backend foundation and sample-rich frontend fallback.
+This is an early-stage MVP with a real backend foundation and live-data-only public clients.
 
 Implemented:
 
@@ -43,7 +43,7 @@ Still in progress:
 - Google Civic address/district matching UX.
 - Auth roles beyond the local admin token.
 - Public production deployment hardening.
-- Replacing dashboard/mobile sample fallback with full live API mode.
+- Expanding live profile completeness across offices, elections, votes, legislation, statements, media, and citations.
 
 ## Architecture
 
@@ -93,7 +93,7 @@ cp .env.example .env
 Important local values:
 
 ```sh
-DATABASE_URL=jdbc:postgresql://localhost:5432/political_data
+DATABASE_URL=jdbc:postgresql://localhost:5434/political_data
 DATABASE_USER=postgres
 DATABASE_PASSWORD=postgres
 ADMIN_API_TOKEN=local-admin-token
@@ -150,12 +150,14 @@ Useful URLs:
 Dashboard: http://localhost:5173 or the next available Vite port
 API:       http://localhost:8080
 Admin:     http://localhost:8081
-Postgres:  localhost:5432
+Postgres:  localhost:5434 (container-to-container: postgres:5432)
 Kafka:     localhost:29092 from host, kafka:9092 from containers
 MinIO:     http://localhost:9000
 ```
 
-If the dashboard API is unavailable or the database has no matching live data, it falls back to sample data so UI work can continue.
+The dashboard and mobile app never replace missing or unavailable live records with sample politicians or fabricated profile details. They show an explicit empty or unavailable state instead.
+
+Kafka readiness and live-profile operations are documented in [docs/LIVE_DATA_OPERATIONS.md](docs/LIVE_DATA_OPERATIONS.md).
 
 ## Data Ingestion
 
@@ -341,9 +343,12 @@ Useful checks:
 ```sh
 scripts/api-smoke-test.sh
 REQUESTS=30 QUERY="Trump" scripts/search-load-smoke.sh
+scripts/release-candidate-check.sh
+scripts/launch-monitor.sh
 ```
 
 Staging performance guidance lives in `docs/STAGING_PERFORMANCE_RUNBOOK.md`.
+Release and launch guidance lives in `docs/RELEASE_CHECKLIST.md`, `docs/API_FREEZE.md`, `docs/MVP_DATASET_FREEZE.md`, `docs/APP_STORE_PRIVACY_PREP.md`, and `docs/LAUNCH_MONITORING.md`.
 
 ## Politician Profile Aggregation
 
@@ -396,10 +401,11 @@ GET /politicians/{politicianId}/statements
 
 ## Search Behavior
 
-Current dashboard behavior:
+Current dashboard and mobile behavior:
 
-1. Try the real API.
-2. If the API is down or returns no matches, show matching sample fallback data.
+1. Search stored PostgreSQL records through the API.
+2. Display live results when they exist.
+3. Show an explicit no-match or API-unavailable state without sample fallback.
 
 Bill backend behavior:
 

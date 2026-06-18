@@ -4,14 +4,24 @@ import com.publicrecord.api.dto.TrustScoreRequest;
 import com.publicrecord.common.trust.InformationType;
 import com.publicrecord.common.trust.SourceQuality;
 import com.publicrecord.common.trust.TrustScore;
+import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
+import io.dropwizard.testing.junit5.ResourceExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
 
+import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.Response;
 import java.time.LocalDate;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@ExtendWith(DropwizardExtensionsSupport.class)
 class TrustResourceTest {
+
+    private static final ResourceExtension RESOURCES = ResourceExtension.builder()
+            .addResource(new TrustResource())
+            .build();
 
     private final TrustResource resource = new TrustResource();
 
@@ -37,5 +47,19 @@ class TrustResourceTest {
         TrustScore score = (TrustScore) response.getEntity();
         assertThat(score.getInformationType()).isEqualTo(InformationType.VOTING_RECORD);
         assertThat(score.getScore()).isGreaterThan(0.8);
+    }
+
+    @Test
+    void scoreAcceptsJsonRequest() {
+        Response response = RESOURCES.target("/trust/score")
+                .request()
+                .post(Entity.json(Map.of(
+                        "informationType", "VOTING_RECORD",
+                        "sourceQuality", "OFFICIAL_RECORD",
+                        "citationCount", 2
+                )));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.readEntity(String.class)).contains("\"score\"");
     }
 }

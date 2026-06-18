@@ -66,7 +66,7 @@ check_endpoint "http://localhost:9200/_cluster/health" "Elasticsearch Cluster"
 
 # Check Kafka
 echo "📨 Checking Kafka..."
-check_service "Kafka" "docker-compose exec -T kafka kafka-topics.sh --bootstrap-server localhost:9092 --list"
+./scripts/kafka-health.sh
 
 # Check MinIO
 echo "📦 Checking MinIO..."

@@ -100,12 +100,8 @@ done
 
 # Run smoke tests
 echo "🧪 Running smoke tests..."
-if curl -f http://localhost:8080/api/health; then
-    echo "✅ API Gateway is responding"
-else
-    echo "❌ API Gateway is not responding"
-    exit 1
-fi
+./scripts/api-smoke-test.sh
+REQUESTS=10 ./scripts/search-load-smoke.sh
 
 echo "🎉 Deployment completed successfully!"
 echo "📊 Application is running at: http://localhost:8080"

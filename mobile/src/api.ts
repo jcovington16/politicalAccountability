@@ -55,6 +55,14 @@ export type PoliticianProfileResponse = {
   billsOpposed: Bill[];
   billsSponsored: Bill[];
   citations: SourceCitationRecord[];
+  contentItems: Array<{
+    id: string;
+    title: string;
+    contentType: string;
+    textBody?: string;
+    sourceUrl?: string;
+    publishedAt: string | [number, number, number];
+  }>;
 };
 
 export type BillDetailResponse = {

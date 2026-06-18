@@ -9,7 +9,7 @@ Local development uses `.env` for scripts and service configuration. Do not comm
 | `DB_NAME` | Liquibase scripts | Local | `political_data` | Database name. |
 | `DB_USERNAME` | Liquibase scripts | Local | `postgres` | Migration database user. |
 | `DB_PASSWORD` | Liquibase scripts | Local | `postgres` | Use secrets manager outside local dev. |
-| `DATABASE_URL` | API, ingestion, Liquibase | Yes | `jdbc:postgresql://localhost:5432/political_data` | Full JDBC URL override. |
+| `DATABASE_URL` | API, ingestion, Liquibase | Yes | `jdbc:postgresql://localhost:5434/political_data` | Full JDBC URL override for host-side tools; containers use `postgres:5432`. |
 | `DATABASE_USER` | API, ingestion | Yes | `postgres` | Runtime database user. |
 | `DATABASE_PASSWORD` | API, ingestion | Yes | `postgres` | Runtime database password. |
 | `ELASTICSEARCH_URL` | Ingestion/search | Local | `http://localhost:9200` | Search index endpoint. |

@@ -18,7 +18,10 @@ class TrustResource {
     @POST
     @Path("/score")
     fun score(request: TrustScoreRequest?): Response {
-        if (request?.informationType == null || request.sourceQuality == null) {
+        val informationType = request?.informationType
+        val sourceQuality = request?.sourceQuality
+
+        if (informationType == null || sourceQuality == null) {
             return Response.status(Response.Status.BAD_REQUEST)
                 .entity("informationType and sourceQuality are required")
                 .build()
@@ -26,8 +29,8 @@ class TrustResource {
 
         val score = TrustScoringService.score(
             TrustScoreInput(
-                informationType = request.informationType,
-                sourceQuality = request.sourceQuality,
+                informationType = informationType,
+                sourceQuality = sourceQuality,
                 citationCount = request.citationCount,
                 publishedDate = request.publishedDate
             )

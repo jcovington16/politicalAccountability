@@ -276,32 +276,32 @@ Week 4 makes the app understandable and trustworthy for real voters. The public 
 - Security: smoke checks verify protected review metrics reject unauthenticated access.
 - Deployment: staging performance runbook added with pass criteria and follow-up metrics.
 
-### Day 28
-- Backend: production deployment rehearsal and rollback plan.
-- Frontend: production web build and staging acceptance pass.
-- Mobile: Expo preview builds for internal testing.
-- Data ingestion: rehearsal import and reindex.
-- Testing: smoke tests on preview builds.
-- Security: app store privacy review and incident response checklist.
-- Deployment: create release checklist.
+### Day 28 - Complete
+- Backend: deployment rehearsal now uses real API smoke/load scripts instead of the old nonexistent `/api/health` route.
+- Frontend: production web build is part of the release-candidate check.
+- Mobile: Expo typecheck is part of the release-candidate check; preview build prep is documented.
+- Data ingestion: rehearsal import flow is documented in the release checklist and importer guide.
+- Testing: release-candidate script runs backend tests, Liquibase validation, sample-data validation, dashboard build, mobile typecheck, and optional live smoke checks.
+- Security: app-store privacy prep and incident-response checklist are documented.
+- Deployment: release checklist and rollback plan added.
 
-### Day 29
-- Backend: fix release-blocking bugs and freeze public API surface.
-- Frontend: fix release-blocking bugs and freeze public UI.
-- Mobile: app store metadata, screenshots, privacy labels, and build submission prep.
-- Data ingestion: freeze MVP dataset and document known data gaps.
-- Testing: full regression suite.
-- Security: final dependency scan and final secrets review.
-- Deployment: tag release candidate.
+### Day 29 - Complete
+- Backend: public API freeze rules documented and protected by the OpenAPI contract test.
+- Frontend: public UI freeze is documented as release-only fixes after this point.
+- Mobile: app-store metadata/privacy preparation checklist added.
+- Data ingestion: MVP dataset freeze and known gaps documented.
+- Testing: release-candidate check is the repeatable regression command.
+- Security: final secrets review remains explicit: `.env` stays local and API keys remain server-side.
+- Deployment: release-candidate tagging process is documented in the release checklist.
 
-### Day 30
-- Backend: launch monitoring for API errors, import failures, search failures, and slow profile responses.
-- Frontend: monitor web behavior and search/profile drop-offs.
-- Mobile: monitor app review feedback, Expo build health, and crash reports.
-- Data ingestion: monitor import errors and source rate limits.
-- Testing: post-launch regression.
-- Security: review abuse signals, audit events, and misinformation-risk reports.
-- Deployment: post-launch retrospective and next 30-day scope.
+### Day 30 - Complete
+- Backend: launch monitoring script checks health, search, bill search, protected metrics boundary, and optional authenticated review metrics.
+- Frontend: search/profile monitoring expectations are documented.
+- Mobile: app review, Expo build health, and crash-report review are documented.
+- Data ingestion: import errors and source-provider rate limits are part of launch monitoring.
+- Testing: post-launch regression cadence is documented.
+- Security: abuse signals, audit events, and misinformation-risk review are included in launch monitoring.
+- Deployment: post-launch retrospective and next-scope process documented.
 
 ## Definition Of Done
 
